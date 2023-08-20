@@ -71,15 +71,15 @@ class UnitreeA1StandTask(RLTask):
 
         # other
         self.dt = 1 / 60
-        self.max_episode_length_s = self._task_cfg["env"]["episodeLength_s"]
+        self.max_episode_length_s = self._task_cfg["env"]["episode_length_s"]
         self.max_episode_length = int(self.max_episode_length_s / self.dt + 0.5)
 
         for key in self.rew_scales.keys():
             self.rew_scales[key] *= self.dt
 
-        self._num_envs = self._task_cfg["env"]["num_envs"]
+        self._num_envs = self._task_cfg["env"]["numEnvs"]
         self._unitree_a1_translation = torch.tensor([0.0, 0.0, 0.4])
-        self._env_spacing = self._task_cfg["env"]["env_spacing"]
+        self._env_spacing = self._task_cfg["env"]["envSpacing"]
         self._num_observations = self._task_cfg["env"]["num_observations"]
         self._num_actions = self._task_cfg["env"]["num_actions"]
 

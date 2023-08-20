@@ -30,15 +30,15 @@ class UnitreeA1(Robot):
             self._usd_path = assets_root_path + "/Isaac/Robots/Unitree/a1.usd"
 
         # self._position = torch.tensor([0.0, 0.0, 0.4]) if translation is None else translation
-        # self._orientation = torch.tensor([1.0, 0.0, 0.0, 0.0]) if orientation is None else orientation
+        # self._orientation = torch.tensor([0.0, 0.0, 0.0, 1.0]) if orientation is None else orientation
         
         add_reference_to_stage(self._usd_path, prim_path)
         
         super().__init__(
             prim_path=prim_path,
             name=name,
-            translation=self._position,
-            orientation=self._orientation,
+            translation=translation,
+            orientation=orientation,
             articulation_controller=None,
         )
 

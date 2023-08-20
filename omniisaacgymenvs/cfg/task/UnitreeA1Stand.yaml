@@ -4,10 +4,10 @@ name: UnitreeA1Stand
 physics_engine: ${..physics_engine}
 
 env:
-  num_envs: ${resolve_default:4096,${...num_envs}}
+  numEnvs: ${resolve_default:4096,${...num_envs}}
+  envSpacing: 3.  # [m]
   num_actions: 12
   num_observations: 30
-  env_spacing: 3.  # [m]
   episode_length_s: 6
 
   normalization:
