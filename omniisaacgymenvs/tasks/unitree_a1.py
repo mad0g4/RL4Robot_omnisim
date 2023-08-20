@@ -289,8 +289,8 @@ class UnitreeA1StandTask(RLTask):
         self.max_down_still_reward = torch.zeros(self._num_envs, dtype=torch.float, device=self._device, requires_grad=False)
 
         if self.is_sample_init_state:
-            # self.total_sample_num = 102400
-            self.total_sample_num = 16
+            self.total_sample_num = 204800
+            # self.total_sample_num = 16
             self.sample_buf = np.zeros((self.total_sample_num, 17), dtype=np.float32) # height_1, rot_4, dof_pos_12
             self.sample_idx = 0
 
