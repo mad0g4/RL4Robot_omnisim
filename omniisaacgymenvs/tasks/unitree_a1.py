@@ -87,7 +87,6 @@ class UnitreeA1StandTask(RLTask):
             self.rew_scales[key] *= self.dt
 
         self._num_envs = self._task_cfg["env"]["numEnvs"]
-        self._unitree_a1_translation = torch.tensor([0.0, 0.0, 0.4])
         self._env_spacing = self._task_cfg["env"]["envSpacing"]
         self._num_observations = self._task_cfg["env"]["num_observations"]
         self._num_actions = self._task_cfg["env"]["num_actions"]
@@ -109,7 +108,7 @@ class UnitreeA1StandTask(RLTask):
         return
 
     def get_unitree_a1(self):
-        unitree_a1 = UnitreeA1(prim_path=self.default_zero_env_path + "/unitree_a1", name="unitree_a1", translation=self._unitree_a1_translation)
+        unitree_a1 = UnitreeA1(prim_path=self.default_zero_env_path + "/unitree_a1", name="unitree_a1", translation=torch.tensor(self.base_init_state[:3]), orientation=torch.tensor(self.base_init_state[3:7]))
         self._sim_config.apply_articulation_settings("unitree_a1", get_prim_at_path(unitree_a1.prim_path), self._sim_config.parse_actor_config("unitree_a1"))
         unitree_a1.set_unitree_a1_properties(self._stage, unitree_a1.prim)
         unitree_a1.prepare_contacts(self._stage, unitree_a1.prim)
@@ -208,14 +207,18 @@ class UnitreeA1StandTask(RLTask):
 
         self.current_targets[env_ids] = dof_pos[:]
 
-        root_vel = torch.zeros((num_resets, 6), device=self._device)
+        root_pos = torch.zeros((num_resets, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        root_rot = torch.zeros((num_resets, 4), dtype=torch.float, device=self._device, requires_grad=False)
+        root_vel = torch.zeros((num_resets, 6), dtype=torch.float, device=self._device, requires_grad=False)
+        root_pos[:, :] = self.base_init_state[:3]
+        root_rot[:, :] = self.base_init_state[3:7]
 
         # apply resets
         indices = env_ids.to(dtype=torch.int32)
         self._unitree_a1s.set_joint_positions(dof_pos, indices)
         self._unitree_a1s.set_joint_velocities(dof_vel, indices)
 
-        self._unitree_a1s.set_world_poses(self.initial_root_pos[env_ids].clone(), self.initial_root_rot[env_ids].clone(), indices)
+        self._unitree_a1s.set_world_poses(root_pos, root_rot, indices)
         self._unitree_a1s.set_velocities(root_vel, indices)
 
         self.commands_x[env_ids] = torch_rand_float(
@@ -237,12 +240,12 @@ class UnitreeA1StandTask(RLTask):
         return
 
     def post_reset(self):
-        self.initial_root_pos, self.initial_root_rot = self._unitree_a1s.get_world_poses()
         self.current_targets = self.default_dof_pos.repeat(self.num_envs, 1)
 
         dof_limits = self._unitree_a1s.get_dof_limits()
         self.unitree_a1_dof_lower_limits = dof_limits[0, :, 0].to(device=self._device)
         self.unitree_a1_dof_upper_limits = dof_limits[0, :, 1].to(device=self._device)
+        print(f'dof_limits: {dof_limits}')
 
         self.commands = torch.zeros(self._num_envs, 3, dtype=torch.float, device=self._device, requires_grad=False)
         self.commands_y = self.commands.view(self._num_envs, 3)[..., 1]
