@@ -390,7 +390,10 @@ class UnitreeA1StandTask(RLTask):
 
     def is_done(self) -> None:
         # reset agents
-        self.time_out_buf = (self.progress_buf >= self.max_episode_length - 1)
+        if self.is_sample_init_state:
+            self.time_out_buf = ((self.dof_vel == 0).all(dim=1) & (self.progress_buf >= 30)) | (self.progress_buf >= self.max_episode_length - 1)
+        else:
+            self.time_out_buf = (self.progress_buf >= self.max_episode_length - 1)
         self.reset_buf[:] = self.time_out_buf | self.fallen_over
 
         if self.is_sample_init_state and torch.sum(self.time_out_buf) > 0:
