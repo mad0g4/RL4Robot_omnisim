@@ -73,3 +73,5 @@ params:
     score_to_win: 20000
     save_frequency: 50
     print_stats: True
+
+    games_num: 10000000000
