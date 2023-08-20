@@ -99,8 +99,8 @@ class UnitreeA1StandTask(RLTask):
         return
 
     def get_unitree_a1(self):
-        unitree_a1 = UnitreeA1(prim_path=self.default_zero_env_path + "/unitree_a1", name="UnitreeA1", translation=self._unitree_a1_translation)
-        self._sim_config.apply_articulation_settings("UnitreeA1", get_prim_at_path(unitree_a1.prim_path), self._sim_config.parse_actor_config("UnitreeA1"))
+        unitree_a1 = UnitreeA1(prim_path=self.default_zero_env_path + "/unitree_a1", name="unitree_a1", translation=self._unitree_a1_translation)
+        self._sim_config.apply_articulation_settings("unitree_a1", get_prim_at_path(unitree_a1.prim_path), self._sim_config.parse_actor_config("unitree_a1"))
 
         # Configure joint properties
         joint_paths = [

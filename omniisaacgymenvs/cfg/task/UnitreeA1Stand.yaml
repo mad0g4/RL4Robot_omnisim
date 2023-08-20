@@ -180,3 +180,18 @@ sim:
     gpu_heap_capacity: 134217728
     gpu_temp_buffer_capacity: 33554432
     gpu_max_num_partitions: 8
+  
+  unitree_a1:
+    # -1 to use default values
+    override_usd_defaults: False
+    enable_self_collisions: True
+    enable_gyroscopic_forces: True
+    # also in stage params
+    # per-actor
+    solver_position_iteration_count: 4
+    solver_velocity_iteration_count: 1
+    sleep_threshold: 0.005
+    stabilization_threshold: 0.001
+    # per-body
+    density: -1
+    max_depenetration_velocity: 100.0
