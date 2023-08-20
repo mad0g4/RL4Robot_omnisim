@@ -207,11 +207,8 @@ class UnitreeA1StandTask(RLTask):
 
         self.current_targets[env_ids] = dof_pos[:]
 
-        root_pos = torch.zeros((num_resets, 3), dtype=torch.float, device=self._device, requires_grad=False)
-        root_rot = torch.zeros((num_resets, 4), dtype=torch.float, device=self._device, requires_grad=False)
+        root_pos, root_rot = self.init_pos, self.init_rot
         root_vel = torch.zeros((num_resets, 6), dtype=torch.float, device=self._device, requires_grad=False)
-        root_pos[:, :] = torch.tensor(self.base_init_state[:3])
-        root_rot[:, :] = torch.tensor(self.base_init_state[3:7])
 
         # apply resets
         indices = env_ids.to(dtype=torch.int32)
@@ -240,12 +237,12 @@ class UnitreeA1StandTask(RLTask):
         return
 
     def post_reset(self):
+        self.init_pos, self.init_rot = self._unitree_a1s.get_world_poses()
         self.current_targets = self.default_dof_pos.repeat(self.num_envs, 1)
 
         dof_limits = self._unitree_a1s.get_dof_limits()
         self.unitree_a1_dof_lower_limits = dof_limits[0, :, 0].to(device=self._device)
         self.unitree_a1_dof_upper_limits = dof_limits[0, :, 1].to(device=self._device)
-        print(f'dof_limits: {dof_limits}')
 
         self.commands = torch.zeros(self._num_envs, 3, dtype=torch.float, device=self._device, requires_grad=False)
         self.commands_y = self.commands.view(self._num_envs, 3)[..., 1]
