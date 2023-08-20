@@ -82,6 +82,7 @@ class UnitreeA1(Robot):
                     rb.CreateSleepThresholdAttr().Set(0)
                     cr_api = PhysxSchema.PhysxContactReportAPI.Apply(link_prim)
                     cr_api.CreateThresholdAttr().Set(0)
+        return
 
     # def set_motor_control_mode(self, stage, unitree_a1_path):
     #     # max_force is lost, default to 1.0

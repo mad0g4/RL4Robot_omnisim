@@ -11,6 +11,7 @@ from omni.isaac.core.utils.torch.rotations import *
 import numpy as np
 import torch
 import math
+import random
 
 
 class UnitreeA1StandTask(RLTask):
@@ -61,8 +62,8 @@ class UnitreeA1StandTask(RLTask):
         self.base_init_state = pos + rot + v_lin + v_ang
 
         # default joint positions
-        self.default_joint_angles = self._task_cfg["env"]["init_state"]["default_joint_angles"]
-        self.down_joint_angles = self._task_cfg["env"]["init_state"]["down_joint_angles"]
+        self.default_dof_poses = self._task_cfg["env"]["init_state"]["default_dof_poses"] # default_joint_angles
+        self.down_dof_angles = self._task_cfg["env"]["init_state"]["down_dof_angles"] # down_joint_angles
 
         # control
         self.Kp = self._task_cfg["env"]["control"]["stiffness"]
@@ -74,6 +75,13 @@ class UnitreeA1StandTask(RLTask):
         self.dt = 1 / 60
         self.max_episode_length_s = self._task_cfg["env"]["episode_length_s"]
         self.max_episode_length = int(self.max_episode_length_s / self.dt + 0.5)
+
+        # domain rand
+        self.push_interval_s = self._task_cfg["env"]["domain_rand"]["push_interval_s"]
+        self.max_push_vel_xy = self._task_cfg["env"]["domain_rand"]["max_push_vel_xy"]
+        self.push_robots = self._task_cfg["env"]["domain_rand"]["push_robots"]
+        self.max_push_interval = np.ceil(self.push_interval_s / self.dt)
+        self.push_interval = int(random.uniform(self.max_push_interval/3, self.max_push_interval))
 
         for key in self.rew_scales.keys():
             self.rew_scales[key] *= self.dt
@@ -117,13 +125,13 @@ class UnitreeA1StandTask(RLTask):
             'FL_thigh/FL_calf_joint', 'FR_thigh/FR_calf_joint', 'RL_thigh/RL_calf_joint', 'RR_thigh/RR_calf_joint', 
         ]
         for joint_path in joint_paths:
-            set_drive(f"{unitree_a1.prim_path}/{joint_path}", "angular", "position", 0, 40.0, 0.1, self.dof_torque_limits[joint_path.split('/')[1].split('_')[1]])
+            set_drive(f"{unitree_a1.prim_path}/{joint_path}", "angular", "position", self.default_dof_poses[joint_path.split('/')[1].split('_')[1]], self.Kp, self.Kd, self.dof_torque_limits[joint_path.split('/')[1].split('_')[1]])
 
         self.default_dof_pos = torch.zeros((12), dtype=torch.float, device=self.device, requires_grad=False)
         self.dof_pos_limit = torch.zeros((12, 2), dtype=torch.float, device=self.device, requires_grad=False)
         self.dof_vel_limit = torch.zeros((12), dtype=torch.float, device=self.device, requires_grad=False)
         for i, dof_name in enumerate(unitree_a1.dof_names):
-            self.default_dof_pos[i] = self.default_joint_angles[dof_name]
+            self.default_dof_pos[i] = self.default_dof_poses[dof_name.split('_')[1]]
             self.dof_pos_limit[i, 0] = self.dof_pos_limits[dof_name.split('_')[1]][0]
             self.dof_pos_limit[i, 1] = self.dof_pos_limits[dof_name.split('_')[1]][1]
             self.dof_vel_limit[i] = self.dof_vel_limits[dof_name.split('_')[1]]
@@ -184,7 +192,12 @@ class UnitreeA1StandTask(RLTask):
         current_targets = self.current_targets + self.action_scale * self.actions * self.dt
         self.current_targets[:] = tensor_clamp(current_targets, self.unitree_a1_dof_lower_limits, self.unitree_a1_dof_upper_limits)
         self._unitree_a1s.set_joint_position_targets(self.current_targets, indices)
-
+        
+        if self.push_robots:
+            self.push_interval -= 1
+            if self.push_interval <= 0:
+                self._push_robots()
+                self.push_interval = int(random.uniform(self.max_push_interval/3, self.max_push_interval))
         return
 
     def reset_idx(self, env_ids):
@@ -305,6 +318,13 @@ class UnitreeA1StandTask(RLTask):
         self.extras['time_outs'] = self.time_out_buf
         return
 
+    def _push_robots(self):
+        root_velocities = self._unitree_a1s.get_velocities(clone=False)
+        pushed_lin_velocities = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device, requires_grad=False)
+        pushed_lin_velocities[:, 2] = root_velocities[:, 2]
+        pushed_lin_velocities[:, :2] = torch_rand_float(-self.max_push_vel_xy, self.max_push_vel_xy, (self.num_envs, 2), device=self.device)
+        self._unitree_a1s.set_linear_velocities(pushed_lin_velocities)
+        return
 
         # rew_torque_limits = ((self.torques/self.torque_limits).square() - self.cfg.rewards.soft_torque_limit).clip(min=0.0).sum(dim=1)
         # lin_vel_error = torch.sum(torch.square(self.commands[:, :2] - base_lin_vel[:, :2]), dim=1)
