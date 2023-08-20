@@ -29,9 +29,9 @@ class UnitreeA1(Robot):
                 carb.log_error("Could not find Isaac Sim assets folder")
             self._usd_path = assets_root_path + "/Isaac/Robots/Unitree/a1.usd"
 
-        self._position = torch.tensor([0.0, 0.0, 0.4]) if translation is None else translation
-        self._orientation = torch.tensor([1.0, 0.0, 0.0, 0.0]) if orientation is None else orientation
-            
+        # self._position = torch.tensor([0.0, 0.0, 0.4]) if translation is None else translation
+        # self._orientation = torch.tensor([1.0, 0.0, 0.0, 0.0]) if orientation is None else orientation
+        
         add_reference_to_stage(self._usd_path, prim_path)
         
         super().__init__(
@@ -42,44 +42,71 @@ class UnitreeA1(Robot):
             articulation_controller=None,
         )
 
-    def set_shadow_hand_properties(self, stage, shadow_hand_prim):
-        for link_prim in shadow_hand_prim.GetChildren():
-            if link_prim.HasAPI(PhysxSchema.PhysxRigidBodyAPI): 
+        self._dof_names = [
+            # 'FL_hip_joint', 'FL_thigh_joint', 'FL_calf_joint', 
+            # 'FR_hip_joint', 'FR_thigh_joint', 'FR_calf_joint', 
+            # 'RL_hip_joint', 'RL_thigh_joint', 'RL_calf_joint', 
+            # 'RR_hip_joint', 'RR_thigh_joint', 'RR_calf_joint', 
+            'FL_hip_joint', 'FR_hip_joint', 'RL_hip_joint', 'RR_hip_joint', 
+            'FL_thigh_joint', 'FR_thigh_joint', 'RL_thigh_joint', 'RR_thigh_joint', 
+            'FL_calf_joint', 'FR_calf_joint', 'RL_calf_joint', 'RR_calf_joint', 
+        ]
+
+        return
+
+    @property
+    def dof_names(self):
+        return self._dof_names
+
+    def set_unitree_a1_properties(self, stage, prim):
+        for link_prim in prim.GetChildren():
+            if link_prim.HasAPI(PhysxSchema.PhysxRigidBodyAPI):
                 rb = PhysxSchema.PhysxRigidBodyAPI.Get(stage, link_prim.GetPrimPath())
-                rb.GetDisableGravityAttr().Set(True)
-                rb.GetRetainAccelerationsAttr().Set(True)
+                rb.GetDisableGravityAttr().Set(False)
+                rb.GetRetainAccelerationsAttr().Set(False)
+                rb.GetLinearDampingAttr().Set(0.0)
+                rb.GetMaxLinearVelocityAttr().Set(1000.0)
+                rb.GetAngularDampingAttr().Set(0.0)
+                rb.GetMaxAngularVelocityAttr().Set(64/np.pi*180)
+        return
 
-    def set_motor_control_mode(self, stage, shadow_hand_path):
-        joints_config = {
-                         "robot0_WRJ1": {"stiffness": 5, "damping": 0.5, "max_force": 4.785},
-                         "robot0_WRJ0": {"stiffness": 5, "damping": 0.5, "max_force": 2.175},
-                         "robot0_FFJ3": {"stiffness": 1, "damping": 0.1, "max_force": 0.9},
-                         "robot0_FFJ2": {"stiffness": 1, "damping": 0.1, "max_force": 0.9},
-                         "robot0_FFJ1": {"stiffness": 1, "damping": 0.1, "max_force": 0.7245},
-                         "robot0_MFJ3": {"stiffness": 1, "damping": 0.1, "max_force": 0.9},
-                         "robot0_MFJ2": {"stiffness": 1, "damping": 0.1, "max_force": 0.9},
-                         "robot0_MFJ1": {"stiffness": 1, "damping": 0.1, "max_force": 0.7245},
-                         "robot0_RFJ3": {"stiffness": 1, "damping": 0.1, "max_force": 0.9},
-                         "robot0_RFJ2": {"stiffness": 1, "damping": 0.1, "max_force": 0.9},
-                         "robot0_RFJ1": {"stiffness": 1, "damping": 0.1, "max_force": 0.7245},
-                         "robot0_LFJ4": {"stiffness": 1, "damping": 0.1, "max_force": 0.9},
-                         "robot0_LFJ3": {"stiffness": 1, "damping": 0.1, "max_force": 0.9},
-                         "robot0_LFJ2": {"stiffness": 1, "damping": 0.1, "max_force": 0.9},
-                         "robot0_LFJ1": {"stiffness": 1, "damping": 0.1, "max_force": 0.7245},
-                         "robot0_THJ4": {"stiffness": 1, "damping": 0.1, "max_force": 2.3722},
-                         "robot0_THJ3": {"stiffness": 1, "damping": 0.1, "max_force": 1.45},
-                         "robot0_THJ2": {"stiffness": 1, "damping": 0.1, "max_force": 0.99},
-                         "robot0_THJ1": {"stiffness": 1, "damping": 0.1, "max_force": 0.99},
-                         "robot0_THJ0": {"stiffness": 1, "damping": 0.1, "max_force": 0.81},
-                        }
+    def prepare_contacts(self, stage, prim):
+        for link_prim in prim.GetChildren():
+            if link_prim.HasAPI(PhysxSchema.PhysxRigidBodyAPI):
+                link_prim_path = str(link_prim.GetPrimPath())
+                if "trunk" in link_prim_path or \
+                        "thigh" in link_prim_path or \
+                        "calf" in link_prim_path or \
+                        "foot" in link_prim_path:
+                    rb = PhysxSchema.PhysxRigidBodyAPI.Get(stage, link_prim.GetPrimPath())
+                    rb.CreateSleepThresholdAttr().Set(0)
+                    cr_api = PhysxSchema.PhysxContactReportAPI.Apply(link_prim)
+                    cr_api.CreateThresholdAttr().Set(0)
 
-        for joint_name, config in joints_config.items():
-            set_drive(
-                f"{self.prim_path}/joints/{joint_name}", 
-                "angular", 
-                "position", 
-                0.0, 
-                config["stiffness"]*np.pi/180, 
-                config["damping"]*np.pi/180, 
-                config["max_force"]
-            )
+    # def set_motor_control_mode(self, stage, unitree_a1_path):
+    #     # max_force is lost, default to 1.0
+    #     joints_config = {
+    #         "FL_hip_joint": {"stiffness": 40.0, "damping": 0.1, "max_force": 1.0, 'relative_prim_path': 'trunk/FL_hip_joint'},
+    #         "FL_thigh_joint": {"stiffness": 40.0, "damping": 0.1, "max_force": 1.0, 'relative_prim_path': 'FL_hip/FL_thigh_joint'},
+    #         "FL_calf_joint": {"stiffness": 40.0, "damping": 0.1, "max_force": 1.0, 'relative_prim_path': 'FL_thigh/FL_calf_joint'},
+    #         "FR_hip_joint": {"stiffness": 40.0, "damping": 0.1, "max_force": 1.0, 'relative_prim_path': 'trunk/FR_hip_joint'},
+    #         "FR_thigh_joint": {"stiffness": 40.0, "damping": 0.1, "max_force": 1.0, 'relative_prim_path': 'FR_hip/FR_thigh_joint'},
+    #         "FR_calf_joint": {"stiffness": 40.0, "damping": 0.1, "max_force": 1.0, 'relative_prim_path': 'FR_thigh/FR_calf_joint'},
+    #         "RL_hip_joint": {"stiffness": 40.0, "damping": 0.1, "max_force": 1.0, 'relative_prim_path': 'trunk/RL_hip_joint'},
+    #         "RL_thigh_joint": {"stiffness": 40.0, "damping": 0.1, "max_force": 1.0, 'relative_prim_path': 'RL_hip/RL_thigh_joint'},
+    #         "RL_calf_joint": {"stiffness": 40.0, "damping": 0.1, "max_force": 1.0, 'relative_prim_path': 'RL_thigh/RL_calf_joint'},
+    #         "RR_hip_joint": {"stiffness": 40.0, "damping": 0.1, "max_force": 1.0, 'relative_prim_path': 'trunk/RR_hip_joint'},
+    #         "RR_thigh_joint": {"stiffness": 40.0, "damping": 0.1, "max_force": 1.0, 'relative_prim_path': 'RR_hip/RR_thigh_joint'},
+    #         "RR_calf_joint": {"stiffness": 40.0, "damping": 0.1, "max_force": 1.0, 'relative_prim_path': 'RR_thigh/RR_calf_joint'},
+    #     }
+
+    #     for joint_name, config in joints_config.items():
+    #         set_drive(
+    #             f"{self.prim_path}/{config['relative_prim_path']}",
+    #             "angular",
+    #             "position",
+    #             0.0, 
+    #             config["stiffness"]*np.pi/180, 
+    #             config["damping"]*np.pi/180,
+    #             config["max_force"],
+    #         )
