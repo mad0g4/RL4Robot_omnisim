@@ -71,7 +71,7 @@ env:
     added_mass_range: [-1.0, 5.0]
     friction_range: [0.0, 1.5]
     max_push_vel_xy: 1.0
-    push_interval_s: 10
+    push_interval_s: 6
     push_robots: True
     randomize_base_mass: True
     randomize_friction: True
