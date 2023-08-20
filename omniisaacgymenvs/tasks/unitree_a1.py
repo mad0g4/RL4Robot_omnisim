@@ -380,15 +380,16 @@ class UnitreeA1StandTask(RLTask):
 
         if self.is_sample_init_state and torch.sum(self.time_out_buf) > 0:
             time_out_idx = torch.nonzero(self.time_out_buf).reshape(-1)
+            num_time_outs = time_out_idx.shape[0]
             samples = np.concatenate((
-                self.torso_position[time_out_idx, [2]].cpu().numpy(),
-                self.torso_rotation[time_out_idx, :].cpu().numpy(),
-                self.dof_pos[time_out_idx, :].cpu().numpy(),
+                self.torso_position[time_out_idx, [2]].cpu().numpy().reshape(num_time_outs, 1),
+                self.torso_rotation[time_out_idx, :].cpu().numpy().reshape(num_time_outs, 4),
+                self.dof_pos[time_out_idx, :].cpu().numpy().reshape(num_time_outs, 12),
             ), axis=-1)
-            if self.sample_idx + samples.shape[0] > self.total_sample_num:
+            if self.sample_idx + num_time_outs > self.total_sample_num:
                 samples = samples[:self.total_sample_num-self.sample_idx, :]
-            self.sample_buf[self.sample_idx:self.sample_idx+samples.shape[0], :] = samples[:]
-            self.sample_idx = self.sample_idx + samples.shape[0]
+            self.sample_buf[self.sample_idx:self.sample_idx+num_time_outs, :] = samples[:]
+            self.sample_idx = self.sample_idx + num_time_outs
             if self.sample_idx == self.total_sample_num:
                 np.save('./UnitreeA1Stand_init_state_samples.npy', self.sample_buf)
                 exit(0)
