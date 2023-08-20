@@ -208,7 +208,8 @@ class UnitreeA1StandTask(RLTask):
         num_resets = len(env_ids)
         # randomize DOF velocities
         dof_pos = self.default_dof_pos.repeat(num_resets, 1)
-        dof_vel = torch_rand_float(-0.1, 0.1, (num_resets, self._unitree_a1s.num_dof), device=self._device)
+        # dof_vel = torch_rand_float(-0.1, 0.1, (num_resets, self._unitree_a1s.num_dof), device=self._device)
+        dof_vel = torch.zeros((self.num_envs, 12), dtype=torch.float, device=self._device, requires_grad=False)
 
         self.current_targets[env_ids] = dof_pos[:]
 
