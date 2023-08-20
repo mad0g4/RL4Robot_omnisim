@@ -2,6 +2,7 @@ from omniisaacgymenvs.tasks.base.rl_task import RLTask
 from omniisaacgymenvs.robots.articulations.unitree_a1 import UnitreeA1
 from omniisaacgymenvs.robots.articulations.views.unitree_a1_view import UnitreeA1View
 from omniisaacgymenvs.tasks.utils.usd_utils import set_drive
+from omniisaacgymenvs import RL4Robot_omnisim_DATA_DIR
 
 from omni.isaac.core.utils.prims import get_prim_at_path
 from omni.isaac.core.utils.stage import get_current_stage
@@ -12,6 +13,7 @@ import numpy as np
 import torch
 import math
 import random
+import os
 
 
 class UnitreeA1StandTask(RLTask):
@@ -76,6 +78,7 @@ class UnitreeA1StandTask(RLTask):
         # default joint positions
         self.default_dof_poses = self._task_cfg["env"]["init_state"]["default_dof_poses"] # default_joint_angles
         self.down_dof_angles = self._task_cfg["env"]["init_state"]["down_dof_angles"] # down_joint_angles
+        self.init_from_prepared_state_data = self._task_cfg["env"]["init_state"]["init_from_prepared_state_data"]
 
         # control
         self.Kp = self._task_cfg["env"]["control"]["stiffness"]
@@ -109,6 +112,10 @@ class UnitreeA1StandTask(RLTask):
         
         if self.is_sample_init_state:
             self.push_robots = False
+        
+        if self.init_from_prepared_state_data:
+            self.prepared_init_state_data = np.load(os.path.join(RL4Robot_omnisim_DATA_DIR, 'UnitreeA1Stand_init_state_samples.npy'))
+            self.prepared_init_state_data_cnt = self.prepared_init_state_data.shape[0]
 
         RLTask.__init__(self, name, env)
         return
@@ -205,6 +212,13 @@ class UnitreeA1StandTask(RLTask):
 
         root_pos, root_rot = self.init_pos[env_ids, :], self.init_rot[env_ids, :]
         root_vel = torch.zeros((num_resets, 6), dtype=torch.float, device=self._device, requires_grad=False)
+        
+        if self.init_from_prepared_state_data:
+            sample_idx = np.random.choice(self.prepared_init_state_data_cnt, num_resets)
+            samples = self.prepared_init_state_data[sample_idx, :]
+            dof_pos[:, :] = torch.tensor(samples[:, -12:], dtype=torch.float32, device=self.device, requires_grad=False)
+            root_rot[:, :] = torch.tensor(samples[:, 1:5], dtype=torch.float32, device=self.device, requires_grad=False)
+            root_pos[:, 2] = torch.tensor(samples[:, 0], dtype=torch.float32, device=self.device, requires_grad=False)
 
         # apply resets
         indices = env_ids.to(dtype=torch.int32)

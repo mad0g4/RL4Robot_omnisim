@@ -59,6 +59,7 @@ env:
       hip: 0.0
       thigh: 1.1577
       calf: -2.7475
+    init_from_prepared_state_data: True
   commands:
     num_commands: 4
     heading_command: False
