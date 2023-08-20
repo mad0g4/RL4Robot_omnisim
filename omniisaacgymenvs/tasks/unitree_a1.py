@@ -274,7 +274,8 @@ class UnitreeA1StandTask(RLTask):
         self.max_down_still_reward = torch.zeros(self._num_envs, dtype=torch.float, device=self._device, requires_grad=False)
 
         if self.is_sample_init_state:
-            self.total_sample_num = 102400
+            # self.total_sample_num = 102400
+            self.total_sample_num = 16
             self.sample_buf = np.zeros((self.total_sample_num, 17), dtype=np.float32) # height_1, rot_4, dof_pos_12
             self.sample_idx = 0
 
@@ -376,6 +377,21 @@ class UnitreeA1StandTask(RLTask):
         # reset agents
         self.time_out_buf = (self.progress_buf >= self.max_episode_length - 1)
         self.reset_buf[:] = self.time_out_buf | self.fallen_over
+
+        if self.is_sample_init_state and torch.sum(self.time_out_buf) > 0:
+            time_out_idx = torch.nonzero(self.time_out_buf).reshape(-1)
+            samples = np.concatenate((
+                self.torso_position[time_out_idx, [2]].cpu().numpy(),
+                self.torso_rotation[time_out_idx, :].cpu().numpy(),
+                self.dof_pos[time_out_idx, :].cpu().numpy(),
+            ), axis=-1)
+            if self.sample_idx + samples.shape[0] > self.total_sample_num:
+                samples = samples[:self.total_sample_num-self.sample_idx, :]
+            self.sample_buf[self.sample_idx:self.sample_idx+samples.shape[0], :] = samples[:]
+            self.sample_idx = self.sample_idx + samples.shape[0]
+            if self.sample_idx == self.total_sample_num:
+                np.save('./UnitreeA1Stand_init_state_samples.npy', self.sample_buf)
+                exit(0)
 
         self.extras['time_outs'] = self.time_out_buf
         return
