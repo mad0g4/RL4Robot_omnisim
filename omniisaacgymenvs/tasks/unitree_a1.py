@@ -320,10 +320,10 @@ class UnitreeA1StandTask(RLTask):
 
     def _push_robots(self):
         root_velocities = self._unitree_a1s.get_velocities(clone=False)
-        pushed_lin_velocities = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device, requires_grad=False)
-        pushed_lin_velocities[:, 2] = root_velocities[:, 2]
-        pushed_lin_velocities[:, :2] = torch_rand_float(-self.max_push_vel_xy, self.max_push_vel_xy, (self.num_envs, 2), device=self.device)
-        self._unitree_a1s.set_linear_velocities(pushed_lin_velocities)
+        pushed_velocities = torch.zeros((self.num_envs, 6), dtype=torch.float, device=self.device, requires_grad=False)
+        pushed_velocities[:, 2:] = root_velocities[:, 2:]
+        pushed_velocities[:, :2] = torch_rand_float(-self.max_push_vel_xy, self.max_push_vel_xy, (self.num_envs, 2), device=self.device)
+        self._unitree_a1s.set_velocities(pushed_velocities)
         return
 
         # rew_torque_limits = ((self.torques/self.torque_limits).square() - self.cfg.rewards.soft_torque_limit).clip(min=0.0).sum(dim=1)
