@@ -38,6 +38,14 @@ class UnitreeA1StandTask(RLTask):
         self.dof_vel_limits = self._task_cfg["env"]["normalization"]["dof_vel_limits"]
         self.dof_torque_limits = self._task_cfg["env"]["normalization"]["dof_torque_limits"]
 
+        # noise
+        self.add_noise = self._task_cfg["env"]["noise"]["add_noise"]
+        self.noise_level = self._task_cfg["env"]["noise"]["noise_level"]
+        self.lin_vel_noise_scale = self._task_cfg["env"]["noise"]["noise_scales"]["lin_vel"]
+        self.ang_vel_noise_scale = self._task_cfg["env"]["noise"]["noise_scales"]["ang_vel"]
+        self.dof_pos_noise_scale = self._task_cfg["env"]["noise"]["noise_scales"]["dof_pos"]
+        self.dof_vel_noise_scale = self._task_cfg["env"]["noise"]["noise_scales"]["dof_vel"]
+
         # reward scales and limit
         self.rew_scales = {}
         for reward_name, reward_scale in self._task_cfg["env"]["rewards"]["scales"].items():
@@ -252,6 +260,7 @@ class UnitreeA1StandTask(RLTask):
         self.current_targets = self.default_dof_pos.repeat(self.num_envs, 1)
 
         dof_limits = self._unitree_a1s.get_dof_limits()
+        print(f'dof_limits: {dof_limits[0]}')
         self.dof_pos_limit[:, 0] = dof_limits[0, :, 0].to(device=self._device)
         self.dof_pos_limit[:, 1] = dof_limits[0, :, 1].to(device=self._device)
 
