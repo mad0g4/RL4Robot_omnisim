@@ -207,7 +207,7 @@ class UnitreeA1StandTask(RLTask):
 
         self.current_targets[env_ids] = dof_pos[:]
 
-        root_pos, root_rot = self.init_pos, self.init_rot
+        root_pos, root_rot = self.init_pos[env_ids, :], self.init_rot[env_ids, :]
         root_vel = torch.zeros((num_resets, 6), dtype=torch.float, device=self._device, requires_grad=False)
 
         # apply resets
