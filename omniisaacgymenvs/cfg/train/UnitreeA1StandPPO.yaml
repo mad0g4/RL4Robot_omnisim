@@ -74,4 +74,5 @@ params:
     save_frequency: 50
     print_stats: True
 
-    games_num: 10000000000
+    player:
+      games_num: 10000000000
