@@ -37,6 +37,7 @@ solver_type: 1 # 0: pgs, 1: tgs
 test: False
 # used to set checkpoint path
 checkpoint: ''
+games_num: 200
 
 # disables rendering
 headless: False
