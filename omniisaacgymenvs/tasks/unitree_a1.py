@@ -186,8 +186,8 @@ class UnitreeA1StandTask(RLTask):
         if len(reset_env_ids) > 0:
             self.reset_idx(reset_env_ids)
 
-        # actions always be default_dof_position
-        actions = self.default_dof_pos.repeat(self.num_envs, 1)
+        # # actions always be default_dof_position
+        # actions = self.default_dof_pos.repeat(self.num_envs, 1)
 
         self.actions[:] = actions.clone().to(self._device)
         # current_targets = self.current_targets + self.action_scale * self.actions * self.dt
