@@ -210,8 +210,8 @@ class UnitreeA1StandTask(RLTask):
         root_pos = torch.zeros((num_resets, 3), dtype=torch.float, device=self._device, requires_grad=False)
         root_rot = torch.zeros((num_resets, 4), dtype=torch.float, device=self._device, requires_grad=False)
         root_vel = torch.zeros((num_resets, 6), dtype=torch.float, device=self._device, requires_grad=False)
-        root_pos[:, :] = self.base_init_state[:3]
-        root_rot[:, :] = self.base_init_state[3:7]
+        root_pos[:, :] = torch.tensor(self.base_init_state[:3])
+        root_rot[:, :] = torch.tensor(self.base_init_state[3:7])
 
         # apply resets
         indices = env_ids.to(dtype=torch.int32)
