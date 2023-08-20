@@ -36,8 +36,8 @@ env:
       thigh: 44.
       calf: 55.
   noise:
-    add_noise: True,
-    noise_level: 1.0,
+    add_noise: True
+    noise_level: 1.0
     noise_scales:
       ang_vel: 0.2
       dof_pos: 0.01

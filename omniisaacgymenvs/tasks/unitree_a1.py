@@ -203,15 +203,15 @@ class UnitreeA1StandTask(RLTask):
         self._unitree_a1s.set_world_poses(root_pos, root_rot, indices)
         self._unitree_a1s.set_velocities(root_vel, indices)
 
-        self.commands_x[env_ids] = torch_rand_float(
-            self.command_x_range[0], self.command_x_range[1], (num_resets, 1), device=self._device
-        ).squeeze()
-        self.commands_y[env_ids] = torch_rand_float(
-            self.command_y_range[0], self.command_y_range[1], (num_resets, 1), device=self._device
-        ).squeeze()
-        self.commands_yaw[env_ids] = torch_rand_float(
-            self.command_yaw_range[0], self.command_yaw_range[1], (num_resets, 1), device=self._device
-        ).squeeze()
+        # self.commands_x[env_ids] = torch_rand_float(
+        #     self.command_x_range[0], self.command_x_range[1], (num_resets, 1), device=self._device
+        # ).squeeze()
+        # self.commands_y[env_ids] = torch_rand_float(
+        #     self.command_y_range[0], self.command_y_range[1], (num_resets, 1), device=self._device
+        # ).squeeze()
+        # self.commands_yaw[env_ids] = torch_rand_float(
+        #     self.command_yaw_range[0], self.command_yaw_range[1], (num_resets, 1), device=self._device
+        # ).squeeze()
 
         # bookkeeping
         self.reset_buf[env_ids] = 0
@@ -294,9 +294,8 @@ class UnitreeA1StandTask(RLTask):
         self.fallen_over = torch.any(torch.norm(self.reset_contact_forces, dim=-1) > 1.0, dim=1)
         
         if self.add_noise:
-            noise_projected_gravity = projected_gravity + (2*torch.rand_like(projected_gravity)-1)*(self.gravity_noise_scale * self.noise_level)
-            obs = torch.cat(
-                (
+            noise_projected_gravity = projected_gravity + (2.0 * torch.rand_like(projected_gravity) - 1.0) * self.gravity_noise_scale * self.noise_level
+            obs = torch.cat((
                     # base_lin_vel * self.lin_vel_scale,
                     # base_ang_vel * self.ang_vel_scale,
                     noise_projected_gravity,
@@ -312,8 +311,7 @@ class UnitreeA1StandTask(RLTask):
                 dim=-1,
             )
         else:
-            obs = torch.cat(
-                (
+            obs = torch.cat((
                     # base_lin_vel * self.lin_vel_scale,
                     # base_ang_vel * self.ang_vel_scale,
                     projected_gravity,
@@ -359,7 +357,6 @@ class UnitreeA1StandTask(RLTask):
 
     def is_done(self) -> None:
         # reset agents
-        print(f'progress_buf: {self.progress_buf[0]}')
         self.time_out_buf = (self.progress_buf >= self.max_episode_length - 1)
         self.reset_buf[:] = self.time_out_buf | self.fallen_over
 
