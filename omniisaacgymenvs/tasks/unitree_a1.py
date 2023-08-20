@@ -4,6 +4,7 @@ from omniisaacgymenvs.robots.articulations.views.unitree_a1_view import UnitreeA
 from omniisaacgymenvs.tasks.utils.usd_utils import set_drive
 
 from omni.isaac.core.utils.prims import get_prim_at_path
+from omni.isaac.core.utils.stage import get_current_stage
 
 from omni.isaac.core.utils.torch.rotations import *
 
@@ -87,6 +88,7 @@ class UnitreeA1StandTask(RLTask):
         return
 
     def set_up_scene(self, scene) -> None:
+        self._stage = get_current_stage()
         self.get_unitree_a1()
         super().set_up_scene(scene)
         self._unitree_a1s = UnitreeA1View(prim_paths_expr="/World/envs/.*/unitree_a1", name="UnitreeA1View", track_contact_forces=True, prepare_contact_sensors=True)
@@ -101,6 +103,8 @@ class UnitreeA1StandTask(RLTask):
     def get_unitree_a1(self):
         unitree_a1 = UnitreeA1(prim_path=self.default_zero_env_path + "/unitree_a1", name="unitree_a1", translation=self._unitree_a1_translation)
         self._sim_config.apply_articulation_settings("unitree_a1", get_prim_at_path(unitree_a1.prim_path), self._sim_config.parse_actor_config("unitree_a1"))
+        unitree_a1.set_unitree_a1_properties(self._stage, unitree_a1.prim)
+        unitree_a1.prepare_contacts(self._stage, unitree_a1.prim)
 
         # Configure joint properties
         joint_paths = [
