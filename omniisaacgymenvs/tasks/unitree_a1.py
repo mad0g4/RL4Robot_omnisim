@@ -181,13 +181,13 @@ class UnitreeA1StandTask(RLTask):
 
     def reset_idx(self, env_ids):
         num_resets = len(env_ids)
-        # randomize DOF velocities
+        # randomize init state
         dof_pos = torch.zeros((num_resets, 12), dtype=torch.float, device=self._device, requires_grad=False)
         dof_pos[:, :4] = torch_rand_float(self.dof_pos_limit[0, 0], self.dof_pos_limit[0, 1], (num_resets, 4), device=self._device)
         dof_pos[:, 4:8] = torch_rand_float(self.dof_pos_limit[4, 0], self.dof_pos_limit[4, 1], (num_resets, 4), device=self._device)
         dof_pos[:, 8:12] = torch_rand_float(self.dof_pos_limit[8, 0], self.dof_pos_limit[8, 1], (num_resets, 4), device=self._device)
-        # dof_pos = self.default_dof_pos.repeat(num_resets, 1)
         dof_vel = torch_rand_float(-0.1, 0.1, (num_resets, self._unitree_a1s.num_dof), device=self._device)
+        # dof_pos = self.default_dof_pos.repeat(num_resets, 1)
         # dof_vel = torch.zeros((self.num_envs, 12), dtype=torch.float, device=self._device, requires_grad=False)
 
         self.current_targets[env_ids] = dof_pos[:]
