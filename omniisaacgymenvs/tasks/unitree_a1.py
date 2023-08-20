@@ -112,6 +112,7 @@ class UnitreeA1StandTask(RLTask):
         
         if self.is_sample_init_state:
             self.push_robots = False
+            self.init_from_prepared_state_data = False
         
         if self.init_from_prepared_state_data:
             self.prepared_init_state_data = np.load(os.path.join(RL4Robot_omnisim_DATA_DIR, 'UnitreeA1Stand_init_state_samples.npy'))

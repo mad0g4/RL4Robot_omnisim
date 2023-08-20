@@ -10,7 +10,7 @@ env:
   num_observations: 30
   episode_length_s: 6
   work_mode:
-    is_sample_init_state: False
+    is_sample_init_state: True
   normalization:
     clip_actions: 100.0
     clip_observations: 100.0
