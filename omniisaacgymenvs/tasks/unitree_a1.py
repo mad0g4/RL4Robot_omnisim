@@ -405,6 +405,7 @@ class UnitreeA1StandTask(RLTask):
                 samples = samples[:self.total_sample_num-self.sample_idx, :]
             self.sample_buf[self.sample_idx:self.sample_idx+num_time_outs, :] = samples[:]
             self.sample_idx = self.sample_idx + num_time_outs
+            print(f'acquire sample num: {num_time_outs}, now sample num: {self.sample_idx}')
             if self.sample_idx == self.total_sample_num:
                 np.save('./UnitreeA1Stand_init_state_samples.npy', self.sample_buf)
                 exit(0)
