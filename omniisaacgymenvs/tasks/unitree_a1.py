@@ -307,7 +307,8 @@ class UnitreeA1StandTask(RLTask):
         self.feet_contact_forces = feet_contact_forces
         
         self.las_dof_vel[:] = dof_vel[:]
-        self.fallen_over = torch.any(torch.norm(self.reset_contact_forces, dim=-1) > 1.0, dim=1)
+        # self.fallen_over = torch.any(torch.norm(self.reset_contact_forces, dim=-1) > 1.0, dim=1)
+        self.fallen_over = self.projected_gravity[:, 2] > -0.0
         
         if self.add_noise:
             noise_projected_gravity = projected_gravity + (2.0 * torch.rand_like(projected_gravity) - 1.0) * self.gravity_noise_scale * self.noise_level
