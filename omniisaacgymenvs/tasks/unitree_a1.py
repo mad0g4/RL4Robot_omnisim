@@ -189,6 +189,7 @@ class UnitreeA1StandTask(RLTask):
 
         # actions always be default_dof_position
         actions = self.default_dof_pos.repeat(self.num_envs, 1)
+        self.push_robots = False
 
         self.actions[:] = actions.clone().to(self._device)
         # current_targets = self.current_targets + self.action_scale * self.actions * self.dt
@@ -242,6 +243,8 @@ class UnitreeA1StandTask(RLTask):
 
     def post_reset(self):
         self.init_pos, self.init_rot = self._unitree_a1s.get_world_poses()
+        self.init_pos[:, 2] = self.init_pos[2]
+        
         self.current_targets = self.default_dof_pos.repeat(self.num_envs, 1)
 
         dof_limits = self._unitree_a1s.get_dof_limits()
