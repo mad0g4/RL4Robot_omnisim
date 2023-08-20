@@ -26,6 +26,9 @@ class UnitreeA1StandTask(RLTask):
         self._cfg = sim_config.config
         self._task_cfg = sim_config.task_config
 
+        # work mode
+        self.is_sample_init_state = self._task_cfg["env"]["work_mode"]["is_sample_init_state"]
+
         # normalization
         self.clip_observations = self._task_cfg["env"]["normalization"]["clip_observations"]
         self.clip_actions = self._task_cfg["env"]["normalization"]["clip_actions"]
@@ -103,6 +106,9 @@ class UnitreeA1StandTask(RLTask):
         self._env_spacing = self._task_cfg["env"]["envSpacing"]
         self._num_observations = self._task_cfg["env"]["num_observations"]
         self._num_actions = self._task_cfg["env"]["num_actions"]
+        
+        if self.is_sample_init_state:
+            self.push_robots = False
 
         RLTask.__init__(self, name, env)
         return
@@ -136,8 +142,9 @@ class UnitreeA1StandTask(RLTask):
             'FL_hip/FL_thigh_joint', 'FR_hip/FR_thigh_joint', 'RL_hip/RL_thigh_joint', 'RR_hip/RR_thigh_joint', 
             'FL_thigh/FL_calf_joint', 'FR_thigh/FR_calf_joint', 'RL_thigh/RL_calf_joint', 'RR_thigh/RR_calf_joint', 
         ]
-        for joint_path in joint_paths:
-            set_drive(f"{unitree_a1.prim_path}/{joint_path}", "angular", "position", self.default_dof_poses[joint_path.split('/')[1].split('_')[1]], self.Kp, self.Kd, self.dof_torque_limits[joint_path.split('/')[1].split('_')[1]])
+        if not self.is_sample_init_state:
+            for joint_path in joint_paths:
+                set_drive(f"{unitree_a1.prim_path}/{joint_path}", "angular", "position", self.default_dof_poses[joint_path.split('/')[1].split('_')[1]], self.Kp, self.Kd, self.dof_torque_limits[joint_path.split('/')[1].split('_')[1]])
 
         self.default_dof_pos = torch.zeros((12), dtype=torch.float, device=self.device, requires_grad=False)
         self.down_dof_pos = torch.zeros((12), dtype=torch.float, device=self.device, requires_grad=False)
@@ -164,7 +171,7 @@ class UnitreeA1StandTask(RLTask):
         # # actions always be default_dof_position
         # actions = self.default_dof_pos.repeat(self.num_envs, 1)
         # self.push_robots = False
-
+        
         self.las_actions[:] = self.actions[:]
         self.actions[:] = actions.clone().to(self._device)
         # current_targets = self.current_targets + self.action_scale * self.actions * self.dt
@@ -182,13 +189,17 @@ class UnitreeA1StandTask(RLTask):
     def reset_idx(self, env_ids):
         num_resets = len(env_ids)
         # randomize init state
-        dof_pos = torch.zeros((num_resets, 12), dtype=torch.float, device=self._device, requires_grad=False)
-        dof_pos[:, :4] = torch_rand_float(self.dof_pos_limit[0, 0], self.dof_pos_limit[0, 1], (num_resets, 4), device=self._device)
-        dof_pos[:, 4:8] = torch_rand_float(self.dof_pos_limit[4, 0], self.dof_pos_limit[4, 1], (num_resets, 4), device=self._device)
-        dof_pos[:, 8:12] = torch_rand_float(self.dof_pos_limit[8, 0], self.dof_pos_limit[8, 1], (num_resets, 4), device=self._device)
-        dof_vel = torch_rand_float(-0.1, 0.1, (num_resets, self._unitree_a1s.num_dof), device=self._device)
-        # dof_pos = self.default_dof_pos.repeat(num_resets, 1)
-        # dof_vel = torch.zeros((self.num_envs, 12), dtype=torch.float, device=self._device, requires_grad=False)
+        # dof_pos = torch.zeros((num_resets, 12), dtype=torch.float, device=self._device, requires_grad=False)
+        # dof_pos[:, :4] = torch_rand_float(self.dof_pos_limit[0, 0], self.dof_pos_limit[0, 1], (num_resets, 4), device=self._device)
+        # dof_pos[:, 4:8] = torch_rand_float(self.dof_pos_limit[4, 0], self.dof_pos_limit[4, 1], (num_resets, 4), device=self._device)
+        # dof_pos[:, 8:12] = torch_rand_float(self.dof_pos_limit[8, 0], self.dof_pos_limit[8, 1], (num_resets, 4), device=self._device)
+        # dof_vel = torch_rand_float(-0.1, 0.1, (num_resets, self._unitree_a1s.num_dof), device=self._device)
+        dof_pos = self.default_dof_pos.repeat(num_resets, 1)
+        if self.is_sample_init_state:
+            dof_pos[:, :4] = torch_rand_float(self.dof_pos_limit[0, 0], self.dof_pos_limit[0, 1], (self.num_envs, 4), device=self.device)
+            dof_pos[:, 4:8] = torch_rand_float(self.dof_pos_limit[4, 0], self.dof_pos_limit[4, 1], (self.num_envs, 4), device=self.device)
+            dof_pos[:, 8:12] = torch_rand_float(self.dof_pos_limit[8, 0], self.dof_pos_limit[8, 1], (self.num_envs, 4), device=self.device)
+        dof_vel = torch.zeros((self.num_envs, 12), dtype=torch.float, device=self._device, requires_grad=False)
 
         self.current_targets[env_ids] = dof_pos[:]
 
@@ -262,8 +273,13 @@ class UnitreeA1StandTask(RLTask):
         
         self.max_down_still_reward = torch.zeros(self._num_envs, dtype=torch.float, device=self._device, requires_grad=False)
 
+        if self.is_sample_init_state:
+            self.total_sample_num = 102400
+            self.sample_buf = np.zeros(self.total_sample_num, 17) # height_1, rot_4, dof_pos_12
+            self.sample_idx = 0
+
         # randomize all envs
-        indices = torch.arange(self._unitree_a1s.count, dtype=torch.int64, device=self._device)
+        indices = torch.arange(self.num_envs, dtype=torch.int64, device=self._device)
         self.reset_idx(indices)
         return
 
