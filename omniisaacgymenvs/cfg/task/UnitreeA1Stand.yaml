@@ -24,9 +24,9 @@ env:
       dof_vel: 0.05
       lin_vel: 0.0
     dof_pos_limits:
-      hip: [-1.222, 1.222]
-      thigh: [-1., 3.5]
-      calf: [-2.775, -0.646]
+      hip: [-0.8029, 0.8029]
+      thigh: [-1.0472, 4.1888]
+      calf: [-2.6965, -0.9163]
     dof_vel_limits:
       hip: 20.
       thigh: 20.
@@ -43,6 +43,7 @@ env:
       dof_pos: 0.01
       dof_vel: 0.15
       lin_vel: 0.1
+      gravity: 0.05
   init_state:
     random_init: True
     # pos: [0.0, 0.0, 0.2569] # x,y,z [m]

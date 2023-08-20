@@ -45,6 +45,7 @@ class UnitreeA1StandTask(RLTask):
         self.ang_vel_noise_scale = self._task_cfg["env"]["noise"]["noise_scales"]["ang_vel"]
         self.dof_pos_noise_scale = self._task_cfg["env"]["noise"]["noise_scales"]["dof_pos"]
         self.dof_vel_noise_scale = self._task_cfg["env"]["noise"]["noise_scales"]["dof_vel"]
+        self.gravity_noise_scale = self._task_cfg["env"]["noise"]["noise_scales"]["gravity"]
 
         # reward scales and limit
         self.rew_scales = {}
@@ -91,8 +92,12 @@ class UnitreeA1StandTask(RLTask):
         self.max_push_interval = np.ceil(self.push_interval_s / self.dt)
         self.push_interval = int(random.uniform(self.max_push_interval/3, self.max_push_interval))
 
+        # reward solving
+        self.rew_register_list = []
         for key in self.rew_scales.keys():
             self.rew_scales[key] *= self.dt
+            if self.rew_scales[key] != 0:
+                self.rew_register_list.append(key)
 
         self._num_envs = self._task_cfg["env"]["numEnvs"]
         self._env_spacing = self._task_cfg["env"]["envSpacing"]
@@ -135,56 +140,18 @@ class UnitreeA1StandTask(RLTask):
             set_drive(f"{unitree_a1.prim_path}/{joint_path}", "angular", "position", self.default_dof_poses[joint_path.split('/')[1].split('_')[1]], self.Kp, self.Kd, self.dof_torque_limits[joint_path.split('/')[1].split('_')[1]])
 
         self.default_dof_pos = torch.zeros((12), dtype=torch.float, device=self.device, requires_grad=False)
+        self.down_dof_pos = torch.zeros((12), dtype=torch.float, device=self.device, requires_grad=False)
         self.dof_pos_limit = torch.zeros((12, 2), dtype=torch.float, device=self.device, requires_grad=False)
         self.dof_vel_limit = torch.zeros((12), dtype=torch.float, device=self.device, requires_grad=False)
+        self.dof_torque_limit = torch.zeros((12), dtype=torch.float, device=self.device, requires_grad=False)
         for i, dof_name in enumerate(unitree_a1.dof_names):
             self.default_dof_pos[i] = self.default_dof_poses[dof_name.split('_')[1]]
-            # self.dof_pos_limit[i, 0] = self.dof_pos_limits[dof_name.split('_')[1]][0]
-            # self.dof_pos_limit[i, 1] = self.dof_pos_limits[dof_name.split('_')[1]][1]
+            self.down_dof_pos[i] = self.down_dof_angles[dof_name.split('_')[1]]
+            self.dof_pos_limit[i, 0] = self.dof_pos_limits[dof_name.split('_')[1]][0]
+            self.dof_pos_limit[i, 1] = self.dof_pos_limits[dof_name.split('_')[1]][1]
             self.dof_vel_limit[i] = self.dof_vel_limits[dof_name.split('_')[1]]
+            self.dof_torque_limit[i] = self.dof_torque_limits[dof_name.split('_')[1]]
         return
-
-    def get_observations(self) -> dict:
-        torso_position, torso_rotation = self._unitree_a1s.get_world_poses(clone=False)
-        root_velocities = self._unitree_a1s.get_velocities(clone=False)
-        dof_pos = self._unitree_a1s.get_joint_positions(clone=False)
-        dof_vel = self._unitree_a1s.get_joint_velocities(clone=False)
-
-        lin_velocity = root_velocities[:, 0:3]
-        ang_velocity = root_velocities[:, 3:6]
-
-        base_lin_vel = quat_rotate_inverse(torso_rotation, lin_velocity) * self.lin_vel_scale
-        base_ang_vel = quat_rotate_inverse(torso_rotation, ang_velocity) * self.ang_vel_scale
-        projected_gravity = quat_rotate(torso_rotation, self.gravity_vec)
-        dof_pos_scaled = (dof_pos - self.default_dof_pos) * self.dof_pos_scale
-        dof_vel_scaled = dof_vel * self.dof_vel_scale
-
-        commands_scaled = self.commands * torch.tensor(
-            [self.lin_vel_scale, self.lin_vel_scale, self.ang_vel_scale],
-            requires_grad=False,
-            device=self.commands.device,
-        )
-
-        obs = torch.cat(
-            (
-                # base_lin_vel,
-                # base_ang_vel,
-                projected_gravity,
-                commands_scaled,
-                dof_pos_scaled,
-                dof_vel_scaled,
-                # self.actions,
-            ),
-            dim=-1,
-        )
-        self.obs_buf[:] = obs
-
-        observations = {
-            self._unitree_a1s.name: {
-                "obs_buf": self.obs_buf
-            }
-        }
-        return observations
 
     def pre_physics_step(self, actions) -> None:
         if not self._env._world.is_playing():
@@ -198,6 +165,7 @@ class UnitreeA1StandTask(RLTask):
         # actions = self.default_dof_pos.repeat(self.num_envs, 1)
         # self.push_robots = False
 
+        self.las_actions[:] = self.actions[:]
         self.actions[:] = actions.clone().to(self._device)
         # current_targets = self.current_targets + self.action_scale * self.actions * self.dt
         current_targets = self.action_scale * self.actions
@@ -248,8 +216,10 @@ class UnitreeA1StandTask(RLTask):
         # bookkeeping
         self.reset_buf[env_ids] = 0
         self.progress_buf[env_ids] = 0
-        self.last_actions[env_ids] = 0.
-        self.last_dof_vel[env_ids] = 0.
+        self.las_actions[env_ids] = 0.
+        self.las_dof_vel[env_ids] = 0.
+        self.max_down_still_reward[env_ids] = 0.
+        self.feet_air_time[env_ids] = 0.
 
         return
 
@@ -259,10 +229,9 @@ class UnitreeA1StandTask(RLTask):
         
         self.current_targets = self.default_dof_pos.repeat(self.num_envs, 1)
 
-        dof_limits = self._unitree_a1s.get_dof_limits()
-        print(f'dof_limits: {dof_limits[0]}')
-        self.dof_pos_limit[:, 0] = dof_limits[0, :, 0].to(device=self._device)
-        self.dof_pos_limit[:, 1] = dof_limits[0, :, 1].to(device=self._device)
+        # dof_limits = self._unitree_a1s.get_dof_limits()
+        # self.dof_pos_limit[:, 0] = dof_limits[0, :, 0].to(device=self._device)
+        # self.dof_pos_limit[:, 1] = dof_limits[0, :, 1].to(device=self._device)
 
         self.commands = torch.zeros(self._num_envs, 3, dtype=torch.float, device=self._device, requires_grad=False)
         self.commands_y = self.commands.view(self._num_envs, 3)[..., 1]
@@ -277,61 +246,120 @@ class UnitreeA1StandTask(RLTask):
         self.actions = torch.zeros(
             self._num_envs, self.num_actions, dtype=torch.float, device=self._device, requires_grad=False
         )
-        self.last_dof_vel = torch.zeros((self._num_envs, 12), dtype=torch.float, device=self._device, requires_grad=False)
-        self.last_actions = torch.zeros(self._num_envs, self.num_actions, dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_dof_vel = torch.zeros((self._num_envs, 12), dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_actions = torch.zeros(self._num_envs, self.num_actions, dtype=torch.float, device=self._device, requires_grad=False)
 
         self.time_out_buf = torch.zeros_like(self.reset_buf)
+        
+        self.collision_contact_forces = torch.zeros((self._num_envs, 8, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.reset_contact_forces = torch.zeros((self._num_envs, 1, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.feet_contact_forces = torch.zeros((self._num_envs, 4, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_collision_contact_forces = torch.zeros((self._num_envs, 8, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_reset_contact_forces = torch.zeros((self._num_envs, 1, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_feet_contact_forces = torch.zeros((self._num_envs, 4, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        
+        self.feet_air_time = torch.zeros((self._num_envs), dtype=torch.float, device=self._device, requires_grad=False)
+        
+        self.max_down_still_reward = torch.zeros(self._num_envs, dtype=torch.float, device=self._device, requires_grad=False)
 
         # randomize all envs
         indices = torch.arange(self._unitree_a1s.count, dtype=torch.int64, device=self._device)
         self.reset_idx(indices)
         return
 
+    def get_observations(self) -> dict:
+        torso_position, torso_rotation = self._unitree_a1s.get_world_poses(clone=False)
+        root_velocities = self._unitree_a1s.get_velocities(clone=False)
+        dof_pos = self._unitree_a1s.get_joint_positions(clone=False)
+        dof_vel = self._unitree_a1s.get_joint_velocities(clone=False)
+        torques = self._unitree_a1s.get_applied_joint_efforts(clone=False)
+        base_lin_vel = quat_rotate_inverse(torso_rotation, root_velocities[:, 0:3])
+        base_ang_vel = quat_rotate_inverse(torso_rotation, root_velocities[:, 3:6])
+        projected_gravity = quat_rotate(torso_rotation, self.gravity_vec)
+        
+        self.torso_position, self.torso_rotation, self.root_velocities, self.dof_pos, self.dof_vel, self.torques, self.base_lin_vel, self.base_ang_vel, self.projected_gravity = torso_position, torso_rotation, root_velocities, dof_pos, dof_vel, torques, base_lin_vel, base_ang_vel, projected_gravity
+        
+        self.las_collision_contact_forces[:] = self.collision_contact_forces[:]
+        self.las_reset_contact_forces[:] = self.reset_contact_forces[:]
+        self.las_feet_contact_forces[:] = self.feet_contact_forces[:]
+        trunk_contact_forces = self._unitree_a1s._trunk.get_net_contact_forces(clone=False, dt=self.dt).view(self.num_envs, 1, 3)
+        thighs_contact_forces = self._unitree_a1s._thighs.get_net_contact_forces(clone=False, dt=self.dt).view(self.num_envs, 4, 3)
+        calfs_contact_forces = self._unitree_a1s._calfs.get_net_contact_forces(clone=False, dt=self.dt).view(self.num_envs, 4, 3)
+        feet_contact_forces = self._unitree_a1s._feet.get_net_contact_forces(clone=False, dt=self.dt).view(self.num_envs, 4, 3)
+        self.collision_contact_forces = torch.cat((thighs_contact_forces, calfs_contact_forces), dim=1)
+        self.reset_contact_forces = trunk_contact_forces
+        self.feet_contact_forces = feet_contact_forces
+        
+        self.las_dof_vel[:] = dof_vel[:]
+        self.fallen_over = torch.any(torch.norm(self.reset_contact_forces, dim=-1) > 1.0, dim=1)
+        
+        if self.add_noise:
+            noise_projected_gravity = projected_gravity + (2*torch.rand_like(projected_gravity)-1)*(self.gravity_noise_scale * self.noise_level)
+            obs = torch.cat(
+                (
+                    # base_lin_vel * self.lin_vel_scale,
+                    # base_ang_vel * self.ang_vel_scale,
+                    noise_projected_gravity,
+                    self.commands * torch.tensor(
+                        [self.lin_vel_scale, self.lin_vel_scale, self.ang_vel_scale],
+                        requires_grad=False,
+                        device=self.commands.device,
+                    ),
+                    (torch.normal(dof_pos, self.dof_pos_noise_scale * self.noise_level) - self.default_dof_pos) * self.dof_pos_scale,
+                    torch.normal(dof_vel, self.dof_vel_noise_scale * self.noise_level) * self.dof_vel_scale,
+                    # self.actions,
+                ),
+                dim=-1,
+            )
+        else:
+            obs = torch.cat(
+                (
+                    # base_lin_vel * self.lin_vel_scale,
+                    # base_ang_vel * self.ang_vel_scale,
+                    projected_gravity,
+                    self.commands * torch.tensor(
+                        [self.lin_vel_scale, self.lin_vel_scale, self.ang_vel_scale],
+                        requires_grad=False,
+                        device=self.commands.device,
+                    ),
+                    (dof_pos - self.default_dof_pos) * self.dof_pos_scale,
+                    dof_vel * self.dof_vel_scale,
+                    # self.actions,
+                ),
+                dim=-1,
+            )
+        self.obs_buf[:] = obs
+
+        observations = {
+            self._unitree_a1s.name: {
+                "obs_buf": self.obs_buf
+            }
+        }
+        return observations
+
     def calculate_metrics(self) -> None:
         torso_position, torso_rotation = self._unitree_a1s.get_world_poses(clone=False)
         root_velocities = self._unitree_a1s.get_velocities(clone=False)
         dof_pos = self._unitree_a1s.get_joint_positions(clone=False)
         dof_vel = self._unitree_a1s.get_joint_velocities(clone=False)
-
-        lin_velocity = root_velocities[:, 0:3]
-        ang_velocity = root_velocities[:, 3:6]
-
-        base_lin_vel = quat_rotate_inverse(torso_rotation, lin_velocity)
-        base_ang_vel = quat_rotate_inverse(torso_rotation, ang_velocity)
+        torques = self._unitree_a1s.get_applied_joint_efforts(clone=False)
+        base_lin_vel = quat_rotate_inverse(torso_rotation, root_velocities[:, 0:3])
+        base_ang_vel = quat_rotate_inverse(torso_rotation, root_velocities[:, 3:6])
         projected_gravity = quat_rotate(torso_rotation, self.gravity_vec)
-
-        trunk_contact_forces = self._unitree_a1s._trunk.get_net_contact_forces(clone=False, dt=self.dt).view(self.num_envs, 1, 3)
-        thighs_contact_forces = self._unitree_a1s._thighs.get_net_contact_forces(clone=False, dt=self.dt).view(self.num_envs, 4, 3)
-        calfs_contact_forces = self._unitree_a1s._calfs.get_net_contact_forces(clone=False, dt=self.dt).view(self.num_envs, 4, 3)
-        collision_contact_forces = torch.cat((thighs_contact_forces, calfs_contact_forces), dim=1)
-        reset_contact_forces = trunk_contact_forces
+        
+        self.torso_position, self.torso_rotation, self.root_velocities, self.dof_pos, self.dof_vel, self.torques, self.base_lin_vel, self.base_ang_vel, self.projected_gravity = torso_position, torso_rotation, root_velocities, dof_pos, dof_vel, torques, base_lin_vel, base_ang_vel, projected_gravity
 
         # reward calculation
-        rew_names = ['action_rate', 'collision', 'termination', 'dof_pos_limits', 'dof_vel_limits', 'stand_still', 'lin_vel_z', 'orientation']
-        rew_action_rate = torch.sum(torch.square(self.last_actions - self.actions), dim=1)
-        rew_collision = torch.sum(1.0 * (torch.norm(collision_contact_forces, dim=-1) > 0.1), dim=1)
-        rew_termination = self.reset_buf * ~self.time_out_buf
-        rew_dof_pos_limits = torch.sum((dof_pos[:, :] - self.dof_pos_limit[:, 1]).clip(min=0.) - (dof_pos[:, :] - self.dof_pos_limit[:, 0]).clip(max=0.), dim=1)
-        rew_dof_vel_limits = torch.sum((torch.square(dof_vel/self.dof_vel_limit) - self.soft_dof_vel_limit).clip(min=0.), dim=1)
-        rew_stand_still = 1.0 - (dof_pos.view(self.num_envs, 3, 4) - self.default_dof_pos.view(3, 4)).square().clip(min=0.02).max(dim=-1)[0].mean(dim=-1)
-        rew_lin_vel_z = torch.square(base_lin_vel[:, 2])
-        rew_orientation = 1 + projected_gravity[:, 2]
-
-        # total_reward calculation
         total_reward = torch.zeros((self.num_envs), dtype=torch.float, device=self.device, requires_grad=False)
-        for rew_name in rew_names:
-            total_reward += locals()[f'rew_{rew_name}'] * self.rew_scales[rew_name]
+        for rew_name in self.rew_register_list:
+            total_reward += getattr(self, f'_reward_{rew_name}')() * self.rew_scales[rew_name]
 
-        self.last_actions[:] = self.actions[:]
-        self.last_dof_vel[:] = dof_vel[:]
-
-        self.fallen_over = torch.any(torch.norm(reset_contact_forces, dim=-1) > 1.0, dim=1)
-        # total_reward[torch.nonzero(self.fallen_over)] = -1
         self.rew_buf[:] = total_reward.detach()
         return
 
     def is_done(self) -> None:
         # reset agents
+        print(f'progress_buf: {self.progress_buf[0]}')
         self.time_out_buf = (self.progress_buf >= self.max_episode_length - 1)
         self.reset_buf[:] = self.time_out_buf | self.fallen_over
 
@@ -352,5 +380,102 @@ class UnitreeA1StandTask(RLTask):
         # rew_lin_vel_xy = torch.exp(-lin_vel_error / 0.25) * self.rew_scales["lin_vel_xy"]
         # rew_ang_vel_z = torch.exp(-ang_vel_error / 0.25) * self.rew_scales["ang_vel_z"]
 
-        # rew_joint_acc = torch.sum(torch.square(self.last_dof_vel - dof_vel), dim=1) * self.rew_scales["joint_acc"]
+        # rew_joint_acc = torch.sum(torch.square(self.las_dof_vel - dof_vel), dim=1) * self.rew_scales["joint_acc"]
         # rew_cosmetic = torch.sum(torch.abs(dof_pos[:, 0:4] - self.default_dof_pos[0:4]), dim=1) * self.rew_scales["cosmetic"]
+
+    #------------ reward functions----------------
+    def _reward_lin_vel_z(self):
+        # Penalize z axis base linear velocity
+        return torch.square(self.base_lin_vel[:, 2])
+    
+    def _reward_ang_vel_xy(self):
+        # Penalize xy axes base angular velocity
+        return torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1)
+
+    def _reward_torques(self):
+        # Penalize torques
+        return torch.sum(torch.square(self.torques), dim=1)
+
+    def _reward_dof_acc(self):
+        # Penalize dof accelerations
+        return torch.sum(torch.square((self.dof_vel[:, :] - self.las_dof_vel[:, :]) / self.dt), dim=1)
+
+    def _reward_collision(self):
+        # Penalize collisions on selected bodies
+        return torch.sum(1.0 * (torch.norm(self.collision_contact_forces, dim=-1) > 0.1), dim=1)
+    
+    def _reward_termination(self):
+        # Terminal reward / penalty
+        return self.reset_buf * ~self.time_out_buf
+
+    def _reward_tracking_lin_vel(self):
+        # Tracking of linear velocity commands (xy axes)
+        lin_vel_error = torch.sum(torch.square(self.commands[:, :2] - self.base_lin_vel[:, :2]), dim=1)
+        return torch.exp(-lin_vel_error/self.tracking_sigma)
+    
+    def _reward_tracking_ang_vel(self):
+        # Tracking of angular velocity commands (yaw) 
+        ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 2])
+        return torch.exp(-ang_vel_error/self.tracking_sigma)
+
+    def _reward_feet_air_time(self):
+        # Reward long steps
+        # Need to filter the contacts because the contact reporting of PhysX is unreliable on meshes
+        # feet_name: ['FL_foot', 'FR_foot', 'RL_foot', 'RR_foot']
+        las_contact = (self.las_feet_contact_forces > 1.0)
+        contact = (self.feet_contact_forces > 1.0)
+        contact_filt = torch.logical_or(contact, las_contact)
+        first_contact = (self.feet_air_time > 0.) * contact_filt
+        self.feet_air_time += self.dt
+        rew_airTime = torch.sum((self.feet_air_time - 0.5) * first_contact, dim=1) # reward only on first contact with the ground
+        rew_airTime *= torch.norm(self.commands[:, :2], dim=1) > 0.1 #no reward for zero command
+        self.feet_air_time *= ~contact_filt
+        return rew_airTime
+
+    def _reward_orientation(self):
+        # Penalize non flat base orientation
+        return 1 + self.projected_gravity[:, 2]
+
+    def _reward_action_rate(self):
+        # Penalize action rate
+        action_rate = self.las_actions - self.actions
+        # if self.add_noise:
+        #     reward = (0.2*(self.noise_dof_pos - self.actions).square() + 0.8*action_rate.square()).sum(dim=1)
+        # else:
+        #     reward = (0.1*(self.dof_pos - self.actions).square() + 0.9*action_rate.square()).sum(dim=1)
+        reward = (0.1*(self.dof_pos - self.actions).square() + 0.9*action_rate.square()).sum(dim=1)
+        return reward
+
+    def _reward_dof_pos_limits(self):
+        # Penalize dof positions too close to the limit
+        out_of_limits = -(self.dof_pos[:, :] - self.dof_pos_limit[:, 0]).clip(max=0.) # lower limit
+        out_of_limits += (self.dof_pos[:, :] - self.dof_pos_limit[:, 1]).clip(min=0.)
+        return torch.sum(out_of_limits, dim=1)
+
+    def _reward_dof_vel_limits(self):
+        # Penalize dof velocities too close to the limit
+        # clip to max error = 1 rad/s per joint to avoid huge penalties
+        return torch.sum((torch.square(self.dof_vel/self.dof_vel_limit) - self.soft_dof_vel_limit).clip(min=0.), dim=1)
+
+    def _reward_down_still(self):
+        #reward sit down
+        _gate = (-torch.sign(self.progress_buf - 0.5 * self.max_episode_length) + 1.0) / 2.0
+        rewards = (
+            1.0 - (self.dof_pos.view(self._num_envs, 3, 4) - self.down_dof_pos.view(3, 4))\
+                .square().clip(min=0.02).max(dim=-1)[0].mean(dim=-1)
+        ) * _gate
+        torch.maximum(rewards, self.max_down_still_reward, out=self.max_down_still_reward)
+        return self.max_down_still_reward * _gate
+
+    def _reward_stand_still(self):
+        # reward stand up
+        _gate = (torch.sign(self.progress_buf - self.max_episode_length * 0.8) + 1.0) / 2.0
+        rewards = (
+            1.0 - (self.dof_pos.view(self._num_envs, 3, 4) - self.default_dof_pos.view(3, 4))\
+                .square().clip(min=0.02).max(dim=-1)[0].mean(dim=-1)
+        ) * _gate
+        return rewards
+
+    def _reward_torque_limits(self):
+        # penalize torques too close to the limit
+        return ((self.torques/self.dof_torque_limit).square() - self.soft_torque_limit).clip(min=0.0).sum(dim=1)
