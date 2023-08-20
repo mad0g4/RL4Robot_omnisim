@@ -275,7 +275,7 @@ class UnitreeA1StandTask(RLTask):
 
         if self.is_sample_init_state:
             self.total_sample_num = 102400
-            self.sample_buf = np.zeros(self.total_sample_num, 17) # height_1, rot_4, dof_pos_12
+            self.sample_buf = np.zeros((self.total_sample_num, 17), dtype=np.float32) # height_1, rot_4, dof_pos_12
             self.sample_idx = 0
 
         # randomize all envs
