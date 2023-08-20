@@ -138,6 +138,7 @@ class UnitreeA1StandTask(RLTask):
 
     def get_observations(self) -> dict:
         torso_position, torso_rotation = self._unitree_a1s.get_world_poses(clone=False)
+        print(f'position: {torso_position[0, :]}')
         root_velocities = self._unitree_a1s.get_velocities(clone=False)
         dof_pos = self._unitree_a1s.get_joint_positions(clone=False)
         dof_vel = self._unitree_a1s.get_joint_velocities(clone=False)
@@ -186,8 +187,8 @@ class UnitreeA1StandTask(RLTask):
         if len(reset_env_ids) > 0:
             self.reset_idx(reset_env_ids)
 
-        # # actions always be default_dof_position
-        # actions = self.default_dof_pos.repeat(self.num_envs, 1)
+        # actions always be default_dof_position
+        actions = self.default_dof_pos.repeat(self.num_envs, 1)
 
         self.actions[:] = actions.clone().to(self._device)
         # current_targets = self.current_targets + self.action_scale * self.actions * self.dt
