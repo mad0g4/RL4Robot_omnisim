@@ -43,7 +43,6 @@ env:
       ang_vel: 0.2
       dof_pos: 0.01
       dof_vel: 0.15
-      gravity: 0.05
       lin_vel: 0.1
 
   init_state:
@@ -184,7 +183,7 @@ sim:
   unitree_a1:
     # -1 to use default values
     override_usd_defaults: False
-    enable_self_collisions: True
+    enable_self_collisions: False
     enable_gyroscopic_forces: True
     # also in stage params
     # per-actor
