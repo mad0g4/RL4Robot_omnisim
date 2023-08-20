@@ -186,11 +186,11 @@ class UnitreeA1StandTask(RLTask):
         if len(reset_env_ids) > 0:
             self.reset_idx(reset_env_ids)
 
-        indices = torch.arange(self._unitree_a1s.count, dtype=torch.int32, device=self._device)
         self.actions[:] = actions.clone().to(self._device)
-        current_targets = self.current_targets + self.action_scale * self.actions * self.dt
+        # current_targets = self.current_targets + self.action_scale * self.actions * self.dt
+        current_targets = self.action_scale * self.actions
         self.current_targets[:] = tensor_clamp(current_targets, self.unitree_a1_dof_lower_limits, self.unitree_a1_dof_upper_limits)
-        self._unitree_a1s.set_joint_position_targets(self.current_targets, indices)
+        self._unitree_a1s.set_joint_position_targets(self.current_targets)
         
         if self.push_robots:
             self.push_interval -= 1
