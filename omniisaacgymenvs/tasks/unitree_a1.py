@@ -255,7 +255,7 @@ class UnitreeA1StandTask(RLTask):
 
         print_rew_summary = {}
         for key, rew in self.rew_summary.items():
-            print_rew_summary[key] = rew[env_ids].sum().item()
+            print_rew_summary[key] = rew[env_ids].mean().item()
         print('')
         pp.pprint(print_rew_summary)
 
