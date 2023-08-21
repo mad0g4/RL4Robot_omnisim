@@ -190,8 +190,8 @@ class UnitreeA1StandTask(RLTask):
         
         self.las_actions[:] = self.actions[:]
         self.actions[:] = actions.clone().to(self._device)
-        current_targets = self.current_targets + self.action_scale * self.actions * self.dt
-        # current_targets = self.action_scale * self.actions
+        # current_targets = self.current_targets + self.action_scale * self.actions * self.dt
+        current_targets = self.action_scale * self.actions
         self.current_targets[:] = tensor_clamp(current_targets, self.dof_pos_limit[:, 0], self.dof_pos_limit[:, 1])
         self._unitree_a1s.set_joint_position_targets(self.current_targets)
         
