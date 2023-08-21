@@ -26,8 +26,6 @@ class UnitreeA1StandTask(RLTask):
         env,
         offset=None
     ) -> None:
-        RLTask.__init__(self, name, env)
-        
         self._sim_config = sim_config
         self._cfg = sim_config.config
         self._task_cfg = sim_config.task_config
@@ -109,12 +107,10 @@ class UnitreeA1StandTask(RLTask):
 
         # reward solving
         self.rew_register_list = []
-        self.rew_summary = {}
         for key in self.rew_scales.keys():
             self.rew_scales[key] *= self.dt
             if self.rew_scales[key] != 0:
                 self.rew_register_list.append(key)
-                self.rew_summary[key] = torch.zeros((self._num_envs,), dtype=torch.float, device=self._device, requires_grad=False)
 
         if self.is_sample_init_state:
             self.push_robots = False
@@ -123,6 +119,8 @@ class UnitreeA1StandTask(RLTask):
         if self.init_from_prepared_state_data:
             self.prepared_init_state_data = np.load(os.path.join(RL4Robot_omnisim_DATA_DIR, 'UnitreeA1Stand_init_state_samples.npy'))
             self.prepared_init_state_data_cnt = self.prepared_init_state_data.shape[0]
+
+        RLTask.__init__(self, name, env)
         return
 
     def set_up_scene(self, scene) -> None:
@@ -312,6 +310,10 @@ class UnitreeA1StandTask(RLTask):
         self.feet_air_time = torch.zeros((self._num_envs), dtype=torch.float, device=self._device, requires_grad=False)
         
         self.max_down_still_reward = torch.zeros(self._num_envs, dtype=torch.float, device=self._device, requires_grad=False)
+
+        self.rew_summary = {}
+        for rew_name in self.rew_register_list:
+            self.rew_summary[rew_name] = torch.zeros((self._num_envs,), dtype=torch.float, device=self._device, requires_grad=False)
 
         if self.is_sample_init_state:
             self.total_sample_num = 204800
