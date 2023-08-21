@@ -93,6 +93,10 @@ class UnitreeA1StandTask(RLTask):
         self.max_episode_length_s = self._task_cfg["env"]["episode_length_s"]
         self.max_episode_length = int(self.max_episode_length_s / self.dt + 0.5)
         self._sim_steps = 0
+        self._num_envs = self._task_cfg["env"]["numEnvs"]
+        self._env_spacing = self._task_cfg["env"]["envSpacing"]
+        self._num_observations = self._task_cfg["env"]["num_observations"]
+        self._num_actions = self._task_cfg["env"]["num_actions"]
 
         # domain rand
         self.push_interval_s = self._task_cfg["env"]["domain_rand"]["push_interval_s"]
@@ -110,11 +114,6 @@ class UnitreeA1StandTask(RLTask):
                 self.rew_register_list.append(key)
                 self.rew_summary[key] = torch.zeros((self._num_envs,), dtype=torch.float, device=self._device, requires_grad=False)
 
-        self._num_envs = self._task_cfg["env"]["numEnvs"]
-        self._env_spacing = self._task_cfg["env"]["envSpacing"]
-        self._num_observations = self._task_cfg["env"]["num_observations"]
-        self._num_actions = self._task_cfg["env"]["num_actions"]
-        
         if self.is_sample_init_state:
             self.push_robots = False
             self.init_from_prepared_state_data = False
