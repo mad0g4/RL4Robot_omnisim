@@ -15,6 +15,8 @@ import math
 import random
 import os
 
+import pprint
+pp = pprint.PrettyPrinter()
 
 class UnitreeA1StandTask(RLTask):
     def __init__(
@@ -90,6 +92,7 @@ class UnitreeA1StandTask(RLTask):
         self.dt = 1 / 60
         self.max_episode_length_s = self._task_cfg["env"]["episode_length_s"]
         self.max_episode_length = int(self.max_episode_length_s / self.dt + 0.5)
+        self._sim_steps = 0
 
         # domain rand
         self.push_interval_s = self._task_cfg["env"]["domain_rand"]["push_interval_s"]
@@ -100,10 +103,12 @@ class UnitreeA1StandTask(RLTask):
 
         # reward solving
         self.rew_register_list = []
+        self.rew_summary = {}
         for key in self.rew_scales.keys():
             self.rew_scales[key] *= self.dt
             if self.rew_scales[key] != 0:
                 self.rew_register_list.append(key)
+                self.rew_summary[key] = torch.zeros((self._num_envs,), dtype=torch.float, device=self._device, requires_grad=False)
 
         self._num_envs = self._task_cfg["env"]["numEnvs"]
         self._env_spacing = self._task_cfg["env"]["envSpacing"]
@@ -179,6 +184,8 @@ class UnitreeA1StandTask(RLTask):
     def pre_physics_step(self, actions) -> None:
         if not self._env._world.is_playing():
             return
+        
+        self._sim_steps += 1
 
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
@@ -249,6 +256,12 @@ class UnitreeA1StandTask(RLTask):
         #     self.command_yaw_range[0], self.command_yaw_range[1], (num_resets, 1), device=self._device
         # ).squeeze()
 
+        print_rew_summary = {}
+        for key, rew in self.rew_summary.items():
+            print_rew_summary[key] = rew[env_ids].sum().item()
+        print('')
+        pp.pprint(print_rew_summary)
+
         # bookkeeping
         self.reset_buf[env_ids] = 0
         self.progress_buf[env_ids] = 0
@@ -256,6 +269,8 @@ class UnitreeA1StandTask(RLTask):
         self.las_dof_vel[env_ids] = 0.
         self.max_down_still_reward[env_ids] = 0.
         self.feet_air_time[env_ids] = 0.
+        for key in self.rew_summary.keys():
+            self.rew_summary[key][env_ids] = 0.
 
         return
 
@@ -394,7 +409,9 @@ class UnitreeA1StandTask(RLTask):
         # reward calculation
         total_reward = torch.zeros((self._num_envs), dtype=torch.float, device=self.device, requires_grad=False)
         for rew_name in self.rew_register_list:
-            total_reward += getattr(self, f'_reward_{rew_name}')() * self.rew_scales[rew_name]
+            this_reward = getattr(self, f'_reward_{rew_name}')() * self.rew_scales[rew_name]
+            total_reward += this_reward
+            self.rew_summary[rew_name] += this_reward
 
         self.rew_buf[:] = total_reward.detach()
         return
