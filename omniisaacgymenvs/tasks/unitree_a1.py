@@ -26,6 +26,8 @@ class UnitreeA1StandTask(RLTask):
         env,
         offset=None
     ) -> None:
+        RLTask.__init__(self, name, env)
+        
         self._sim_config = sim_config
         self._cfg = sim_config.config
         self._task_cfg = sim_config.task_config
@@ -121,8 +123,6 @@ class UnitreeA1StandTask(RLTask):
         if self.init_from_prepared_state_data:
             self.prepared_init_state_data = np.load(os.path.join(RL4Robot_omnisim_DATA_DIR, 'UnitreeA1Stand_init_state_samples.npy'))
             self.prepared_init_state_data_cnt = self.prepared_init_state_data.shape[0]
-
-        RLTask.__init__(self, name, env)
         return
 
     def set_up_scene(self, scene) -> None:
