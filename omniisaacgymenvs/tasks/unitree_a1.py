@@ -105,7 +105,7 @@ class UnitreeA1StandTask(RLTask):
             if self.rew_scales[key] != 0:
                 self.rew_register_list.append(key)
 
-        self.num_envs = self._task_cfg["env"]["numEnvs"]
+        self._num_envs = self._task_cfg["env"]["numEnvs"]
         self._env_spacing = self._task_cfg["env"]["envSpacing"]
         self._num_observations = self._task_cfg["env"]["num_observations"]
         self._num_actions = self._task_cfg["env"]["num_actions"]
@@ -185,7 +185,7 @@ class UnitreeA1StandTask(RLTask):
             self.reset_idx(reset_env_ids)
 
         # # actions always be default_dof_position
-        # actions = self.default_dof_pos.repeat(self.num_envs, 1)
+        # actions = self.default_dof_pos.repeat(self._num_envs, 1)
         # self.push_robots = False
         
         self.las_actions[:] = self.actions[:]
@@ -263,41 +263,41 @@ class UnitreeA1StandTask(RLTask):
         self.init_pos, self.init_rot = self._unitree_a1s.get_world_poses()
         self.init_pos[:, 2] = self.base_init_state[2]
         
-        # self.current_targets = self.default_dof_pos.repeat(self.num_envs, 1)
-        self.current_targets = torch.zeros((self.num_envs, 12), dtype=torch.float, device=self._device, requires_grad=False)
+        # self.current_targets = self.default_dof_pos.repeat(self._num_envs, 1)
+        self.current_targets = torch.zeros((self._num_envs, 12), dtype=torch.float, device=self._device, requires_grad=False)
 
         # dof_limits = self._unitree_a1s.get_dof_limits()
         # self.dof_pos_limit[:, 0] = dof_limits[0, :, 0].to(device=self._device)
         # self.dof_pos_limit[:, 1] = dof_limits[0, :, 1].to(device=self._device)
 
-        self.commands = torch.zeros(self.num_envs, 3, dtype=torch.float, device=self._device, requires_grad=False)
-        self.commands_y = self.commands.view(self.num_envs, 3)[..., 1]
-        self.commands_x = self.commands.view(self.num_envs, 3)[..., 0]
-        self.commands_yaw = self.commands.view(self.num_envs, 3)[..., 2]
+        self.commands = torch.zeros(self._num_envs, 3, dtype=torch.float, device=self._device, requires_grad=False)
+        self.commands_y = self.commands.view(self._num_envs, 3)[..., 1]
+        self.commands_x = self.commands.view(self._num_envs, 3)[..., 0]
+        self.commands_yaw = self.commands.view(self._num_envs, 3)[..., 2]
 
         # initialize some data used later on
         self.extras = {}
         self.gravity_vec = torch.tensor([0.0, 0.0, -1.0], device=self._device).repeat(
-            (self.num_envs, 1)
+            (self._num_envs, 1)
         )
         self.actions = torch.zeros(
-            self.num_envs, self.num_actions, dtype=torch.float, device=self._device, requires_grad=False
+            self._num_envs, self.num_actions, dtype=torch.float, device=self._device, requires_grad=False
         )
-        self.las_dof_vel = torch.zeros((self.num_envs, 12), dtype=torch.float, device=self._device, requires_grad=False)
-        self.las_actions = torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_dof_vel = torch.zeros((self._num_envs, 12), dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_actions = torch.zeros(self._num_envs, self.num_actions, dtype=torch.float, device=self._device, requires_grad=False)
 
         self.time_out_buf = torch.zeros_like(self.reset_buf)
         
-        self.collision_contact_forces = torch.zeros((self.num_envs, 8, 3), dtype=torch.float, device=self._device, requires_grad=False)
-        self.reset_contact_forces = torch.zeros((self.num_envs, 1, 3), dtype=torch.float, device=self._device, requires_grad=False)
-        self.feet_contact_forces = torch.zeros((self.num_envs, 4, 3), dtype=torch.float, device=self._device, requires_grad=False)
-        self.las_collision_contact_forces = torch.zeros((self.num_envs, 8, 3), dtype=torch.float, device=self._device, requires_grad=False)
-        self.las_reset_contact_forces = torch.zeros((self.num_envs, 1, 3), dtype=torch.float, device=self._device, requires_grad=False)
-        self.las_feet_contact_forces = torch.zeros((self.num_envs, 4, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.collision_contact_forces = torch.zeros((self._num_envs, 8, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.reset_contact_forces = torch.zeros((self._num_envs, 1, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.feet_contact_forces = torch.zeros((self._num_envs, 4, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_collision_contact_forces = torch.zeros((self._num_envs, 8, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_reset_contact_forces = torch.zeros((self._num_envs, 1, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_feet_contact_forces = torch.zeros((self._num_envs, 4, 3), dtype=torch.float, device=self._device, requires_grad=False)
         
-        self.feet_air_time = torch.zeros((self.num_envs), dtype=torch.float, device=self._device, requires_grad=False)
+        self.feet_air_time = torch.zeros((self._num_envs), dtype=torch.float, device=self._device, requires_grad=False)
         
-        self.max_down_still_reward = torch.zeros(self.num_envs, dtype=torch.float, device=self._device, requires_grad=False)
+        self.max_down_still_reward = torch.zeros(self._num_envs, dtype=torch.float, device=self._device, requires_grad=False)
 
         if self.is_sample_init_state:
             self.total_sample_num = 204800
@@ -306,7 +306,7 @@ class UnitreeA1StandTask(RLTask):
             self.sample_idx = 0
 
         # randomize all envs
-        indices = torch.arange(self.num_envs, dtype=torch.int64, device=self._device)
+        indices = torch.arange(self._num_envs, dtype=torch.int64, device=self._device)
         self.reset_idx(indices)
         return
 
@@ -325,10 +325,10 @@ class UnitreeA1StandTask(RLTask):
         self.las_collision_contact_forces[:] = self.collision_contact_forces[:]
         self.las_reset_contact_forces[:] = self.reset_contact_forces[:]
         self.las_feet_contact_forces[:] = self.feet_contact_forces[:]
-        trunk_contact_forces = self._unitree_a1s._trunk.get_net_contact_forces(clone=False, dt=self.dt).view(self.num_envs, 1, 3)
-        thighs_contact_forces = self._unitree_a1s._thighs.get_net_contact_forces(clone=False, dt=self.dt).view(self.num_envs, 4, 3)
-        calfs_contact_forces = self._unitree_a1s._calfs.get_net_contact_forces(clone=False, dt=self.dt).view(self.num_envs, 4, 3)
-        feet_contact_forces = self._unitree_a1s._feet.get_net_contact_forces(clone=False, dt=self.dt).view(self.num_envs, 4, 3)
+        trunk_contact_forces = self._unitree_a1s._trunk.get_net_contact_forces(clone=False, dt=self.dt).view(self._num_envs, 1, 3)
+        thighs_contact_forces = self._unitree_a1s._thighs.get_net_contact_forces(clone=False, dt=self.dt).view(self._num_envs, 4, 3)
+        calfs_contact_forces = self._unitree_a1s._calfs.get_net_contact_forces(clone=False, dt=self.dt).view(self._num_envs, 4, 3)
+        feet_contact_forces = self._unitree_a1s._feet.get_net_contact_forces(clone=False, dt=self.dt).view(self._num_envs, 4, 3)
         self.collision_contact_forces = torch.cat((thighs_contact_forces, calfs_contact_forces), dim=1)
         self.reset_contact_forces = trunk_contact_forces
         self.feet_contact_forces = feet_contact_forces
@@ -392,7 +392,7 @@ class UnitreeA1StandTask(RLTask):
         self.torso_position, self.torso_rotation, self.root_velocities, self.dof_pos, self.dof_vel, self.torques, self.base_lin_vel, self.base_ang_vel, self.projected_gravity = torso_position, torso_rotation, root_velocities, dof_pos, dof_vel, torques, base_lin_vel, base_ang_vel, projected_gravity
 
         # reward calculation
-        total_reward = torch.zeros((self.num_envs), dtype=torch.float, device=self.device, requires_grad=False)
+        total_reward = torch.zeros((self._num_envs), dtype=torch.float, device=self.device, requires_grad=False)
         for rew_name in self.rew_register_list:
             total_reward += getattr(self, f'_reward_{rew_name}')() * self.rew_scales[rew_name]
 
@@ -429,9 +429,9 @@ class UnitreeA1StandTask(RLTask):
 
     def _push_robots(self):
         root_velocities = self._unitree_a1s.get_velocities(clone=False)
-        pushed_velocities = torch.zeros((self.num_envs, 6), dtype=torch.float, device=self.device, requires_grad=False)
+        pushed_velocities = torch.zeros((self._num_envs, 6), dtype=torch.float, device=self.device, requires_grad=False)
         pushed_velocities[:, 2:] = root_velocities[:, 2:]
-        pushed_velocities[:, :2] = torch_rand_float(-self.max_push_vel_xy, self.max_push_vel_xy, (self.num_envs, 2), device=self.device)
+        pushed_velocities[:, :2] = torch_rand_float(-self.max_push_vel_xy, self.max_push_vel_xy, (self._num_envs, 2), device=self.device)
         self._unitree_a1s.set_velocities(pushed_velocities)
         return
 
@@ -522,7 +522,7 @@ class UnitreeA1StandTask(RLTask):
         #reward sit down
         _gate = (-torch.sign(self.progress_buf - 0.5 * self.max_episode_length) + 1.0) / 2.0
         rewards = (
-            1.0 - (self.dof_pos.view(self.num_envs, 3, 4) - self.down_dof_pos.view(3, 4))\
+            1.0 - (self.dof_pos.view(self._num_envs, 3, 4) - self.down_dof_pos.view(3, 4))\
                 .square().clip(min=0.02).max(dim=-1)[0].mean(dim=-1)
         ) * _gate
         torch.maximum(rewards, self.max_down_still_reward, out=self.max_down_still_reward)
@@ -532,7 +532,7 @@ class UnitreeA1StandTask(RLTask):
         # reward stand up
         _gate = (torch.sign(self.progress_buf - self.max_episode_length * 0.8) + 1.0) / 2.0
         rewards = (
-            1.0 - (self.dof_pos.view(self.num_envs, 3, 4) - self.default_dof_pos.view(3, 4))\
+            1.0 - (self.dof_pos.view(self._num_envs, 3, 4) - self.default_dof_pos.view(3, 4))\
                 .square().clip(min=0.02).max(dim=-1)[0].mean(dim=-1)
         ) * _gate
         return rewards
