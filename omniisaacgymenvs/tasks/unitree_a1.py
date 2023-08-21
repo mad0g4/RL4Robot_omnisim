@@ -105,7 +105,7 @@ class UnitreeA1StandTask(RLTask):
             if self.rew_scales[key] != 0:
                 self.rew_register_list.append(key)
 
-        self._num_envs = self._task_cfg["env"]["numEnvs"]
+        self.num_envs = self._task_cfg["env"]["numEnvs"]
         self._env_spacing = self._task_cfg["env"]["envSpacing"]
         self._num_observations = self._task_cfg["env"]["num_observations"]
         self._num_actions = self._task_cfg["env"]["num_actions"]
@@ -152,7 +152,15 @@ class UnitreeA1StandTask(RLTask):
         ]
         if not self.is_sample_init_state:
             for joint_path in joint_paths:
-                set_drive(f"{unitree_a1.prim_path}/{joint_path}", "angular", "position", self.default_dof_poses[joint_path.split('/')[1].split('_')[1]], self.Kp, self.Kd, self.dof_torque_limits[joint_path.split('/')[1].split('_')[1]])
+                set_drive(
+                    f"{unitree_a1.prim_path}/{joint_path}",
+                    "angular",
+                    "position",
+                    self.default_dof_poses[joint_path.split('/')[1].split('_')[1]],
+                    self.Kp,
+                    self.Kd,
+                    self.dof_torque_limits[joint_path.split('/')[1].split('_')[1]] * self.soft_torque_limit,
+                )
 
         self.default_dof_pos = torch.zeros((12), dtype=torch.float, device=self.device, requires_grad=False)
         self.down_dof_pos = torch.zeros((12), dtype=torch.float, device=self.device, requires_grad=False)
@@ -162,8 +170,8 @@ class UnitreeA1StandTask(RLTask):
         for i, dof_name in enumerate(unitree_a1.dof_names):
             self.default_dof_pos[i] = self.default_dof_poses[dof_name.split('_')[1]]
             self.down_dof_pos[i] = self.down_dof_angles[dof_name.split('_')[1]]
-            self.dof_pos_limit[i, 0] = self.dof_pos_limits[dof_name.split('_')[1]][0]
-            self.dof_pos_limit[i, 1] = self.dof_pos_limits[dof_name.split('_')[1]][1]
+            self.dof_pos_limit[i, 0] = self.dof_pos_limits[dof_name.split('_')[1]][0] * self.soft_dof_pos_limit
+            self.dof_pos_limit[i, 1] = self.dof_pos_limits[dof_name.split('_')[1]][1] * self.soft_dof_pos_limit
             self.dof_vel_limit[i] = self.dof_vel_limits[dof_name.split('_')[1]]
             self.dof_torque_limit[i] = self.dof_torque_limits[dof_name.split('_')[1]]
         return
@@ -182,8 +190,8 @@ class UnitreeA1StandTask(RLTask):
         
         self.las_actions[:] = self.actions[:]
         self.actions[:] = actions.clone().to(self._device)
-        # current_targets = self.current_targets + self.action_scale * self.actions * self.dt
-        current_targets = self.action_scale * self.actions
+        current_targets = self.current_targets + self.action_scale * self.actions * self.dt
+        # current_targets = self.action_scale * self.actions
         self.current_targets[:] = tensor_clamp(current_targets, self.dof_pos_limit[:, 0], self.dof_pos_limit[:, 1])
         self._unitree_a1s.set_joint_position_targets(self.current_targets)
         
@@ -202,14 +210,13 @@ class UnitreeA1StandTask(RLTask):
         # dof_pos[:, 4:8] = torch_rand_float(self.dof_pos_limit[4, 0], self.dof_pos_limit[4, 1], (num_resets, 4), device=self._device)
         # dof_pos[:, 8:12] = torch_rand_float(self.dof_pos_limit[8, 0], self.dof_pos_limit[8, 1], (num_resets, 4), device=self._device)
         # dof_vel = torch_rand_float(-0.1, 0.1, (num_resets, self._unitree_a1s.num_dof), device=self._device)
-        dof_pos = self.default_dof_pos.repeat(num_resets, 1)
+        # dof_pos = self.default_dof_pos.repeat(num_resets, 1)
+        dof_pos = torch.zeros((num_resets, 12), dtype=torch.float, device=self._device, requires_grad=False)
         if self.is_sample_init_state:
             dof_pos[:, :4] = torch_rand_float(self.dof_pos_limit[0, 0], self.dof_pos_limit[0, 1], (num_resets, 4), device=self.device)
             dof_pos[:, 4:8] = torch_rand_float(self.dof_pos_limit[4, 0], self.dof_pos_limit[4, 1], (num_resets, 4), device=self.device)
             dof_pos[:, 8:12] = torch_rand_float(self.dof_pos_limit[8, 0], self.dof_pos_limit[8, 1], (num_resets, 4), device=self.device)
         dof_vel = torch.zeros((num_resets, 12), dtype=torch.float, device=self._device, requires_grad=False)
-
-        self.current_targets[env_ids] = dof_pos[:]
 
         root_pos, root_rot = self.init_pos[env_ids, :], self.init_rot[env_ids, :]
         root_vel = torch.zeros((num_resets, 6), dtype=torch.float, device=self._device, requires_grad=False)
@@ -221,10 +228,13 @@ class UnitreeA1StandTask(RLTask):
             root_rot[:, :] = torch.tensor(samples[:, 1:5], dtype=torch.float32, device=self.device, requires_grad=False)
             root_pos[:, 2] = torch.tensor(samples[:, 0], dtype=torch.float32, device=self.device, requires_grad=False)
 
+        self.current_targets[env_ids] = dof_pos[:]
+        
         # apply resets
         indices = env_ids.to(dtype=torch.int32)
         self._unitree_a1s.set_joint_positions(dof_pos, indices)
         self._unitree_a1s.set_joint_velocities(dof_vel, indices)
+        self._unitree_a1s.set_joint_position_targets(dof_pos, indices)
 
         self._unitree_a1s.set_world_poses(root_pos, root_rot, indices)
         self._unitree_a1s.set_velocities(root_vel, indices)
@@ -253,40 +263,41 @@ class UnitreeA1StandTask(RLTask):
         self.init_pos, self.init_rot = self._unitree_a1s.get_world_poses()
         self.init_pos[:, 2] = self.base_init_state[2]
         
-        self.current_targets = self.default_dof_pos.repeat(self.num_envs, 1)
+        # self.current_targets = self.default_dof_pos.repeat(self.num_envs, 1)
+        self.current_targets = torch.zeros((self.num_envs, 12), dtype=torch.float, device=self._device, requires_grad=False)
 
         # dof_limits = self._unitree_a1s.get_dof_limits()
         # self.dof_pos_limit[:, 0] = dof_limits[0, :, 0].to(device=self._device)
         # self.dof_pos_limit[:, 1] = dof_limits[0, :, 1].to(device=self._device)
 
-        self.commands = torch.zeros(self._num_envs, 3, dtype=torch.float, device=self._device, requires_grad=False)
-        self.commands_y = self.commands.view(self._num_envs, 3)[..., 1]
-        self.commands_x = self.commands.view(self._num_envs, 3)[..., 0]
-        self.commands_yaw = self.commands.view(self._num_envs, 3)[..., 2]
+        self.commands = torch.zeros(self.num_envs, 3, dtype=torch.float, device=self._device, requires_grad=False)
+        self.commands_y = self.commands.view(self.num_envs, 3)[..., 1]
+        self.commands_x = self.commands.view(self.num_envs, 3)[..., 0]
+        self.commands_yaw = self.commands.view(self.num_envs, 3)[..., 2]
 
         # initialize some data used later on
         self.extras = {}
         self.gravity_vec = torch.tensor([0.0, 0.0, -1.0], device=self._device).repeat(
-            (self._num_envs, 1)
+            (self.num_envs, 1)
         )
         self.actions = torch.zeros(
-            self._num_envs, self.num_actions, dtype=torch.float, device=self._device, requires_grad=False
+            self.num_envs, self.num_actions, dtype=torch.float, device=self._device, requires_grad=False
         )
-        self.las_dof_vel = torch.zeros((self._num_envs, 12), dtype=torch.float, device=self._device, requires_grad=False)
-        self.las_actions = torch.zeros(self._num_envs, self.num_actions, dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_dof_vel = torch.zeros((self.num_envs, 12), dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_actions = torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self._device, requires_grad=False)
 
         self.time_out_buf = torch.zeros_like(self.reset_buf)
         
-        self.collision_contact_forces = torch.zeros((self._num_envs, 8, 3), dtype=torch.float, device=self._device, requires_grad=False)
-        self.reset_contact_forces = torch.zeros((self._num_envs, 1, 3), dtype=torch.float, device=self._device, requires_grad=False)
-        self.feet_contact_forces = torch.zeros((self._num_envs, 4, 3), dtype=torch.float, device=self._device, requires_grad=False)
-        self.las_collision_contact_forces = torch.zeros((self._num_envs, 8, 3), dtype=torch.float, device=self._device, requires_grad=False)
-        self.las_reset_contact_forces = torch.zeros((self._num_envs, 1, 3), dtype=torch.float, device=self._device, requires_grad=False)
-        self.las_feet_contact_forces = torch.zeros((self._num_envs, 4, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.collision_contact_forces = torch.zeros((self.num_envs, 8, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.reset_contact_forces = torch.zeros((self.num_envs, 1, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.feet_contact_forces = torch.zeros((self.num_envs, 4, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_collision_contact_forces = torch.zeros((self.num_envs, 8, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_reset_contact_forces = torch.zeros((self.num_envs, 1, 3), dtype=torch.float, device=self._device, requires_grad=False)
+        self.las_feet_contact_forces = torch.zeros((self.num_envs, 4, 3), dtype=torch.float, device=self._device, requires_grad=False)
         
-        self.feet_air_time = torch.zeros((self._num_envs), dtype=torch.float, device=self._device, requires_grad=False)
+        self.feet_air_time = torch.zeros((self.num_envs), dtype=torch.float, device=self._device, requires_grad=False)
         
-        self.max_down_still_reward = torch.zeros(self._num_envs, dtype=torch.float, device=self._device, requires_grad=False)
+        self.max_down_still_reward = torch.zeros(self.num_envs, dtype=torch.float, device=self._device, requires_grad=False)
 
         if self.is_sample_init_state:
             self.total_sample_num = 204800
@@ -511,7 +522,7 @@ class UnitreeA1StandTask(RLTask):
         #reward sit down
         _gate = (-torch.sign(self.progress_buf - 0.5 * self.max_episode_length) + 1.0) / 2.0
         rewards = (
-            1.0 - (self.dof_pos.view(self._num_envs, 3, 4) - self.down_dof_pos.view(3, 4))\
+            1.0 - (self.dof_pos.view(self.num_envs, 3, 4) - self.down_dof_pos.view(3, 4))\
                 .square().clip(min=0.02).max(dim=-1)[0].mean(dim=-1)
         ) * _gate
         torch.maximum(rewards, self.max_down_still_reward, out=self.max_down_still_reward)
@@ -521,7 +532,7 @@ class UnitreeA1StandTask(RLTask):
         # reward stand up
         _gate = (torch.sign(self.progress_buf - self.max_episode_length * 0.8) + 1.0) / 2.0
         rewards = (
-            1.0 - (self.dof_pos.view(self._num_envs, 3, 4) - self.default_dof_pos.view(3, 4))\
+            1.0 - (self.dof_pos.view(self.num_envs, 3, 4) - self.default_dof_pos.view(3, 4))\
                 .square().clip(min=0.02).max(dim=-1)[0].mean(dim=-1)
         ) * _gate
         return rewards
