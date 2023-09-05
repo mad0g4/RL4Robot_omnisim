@@ -105,7 +105,7 @@ env:
       lin_acc_z: -0.0
       lin_vel_xy: 0
       lin_vel_z: -1
-      orientation: -10
+      orientation: -100
       power: -0.0
       stand_still: 10.0
       termination: -100
