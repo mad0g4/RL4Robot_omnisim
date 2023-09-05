@@ -6,7 +6,9 @@ experiment: ''
 
 # if set to positive integer, overrides the default number of environments
 num_envs: ''
+
 init_from_prepared_state_data: True
+push_robots: True
 
 # seed - set to -1 to choose random seed
 seed: 42
