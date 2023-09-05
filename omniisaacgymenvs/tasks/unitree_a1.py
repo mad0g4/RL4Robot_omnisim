@@ -334,6 +334,7 @@ class UnitreeA1StandTask(RLTask):
 
     def get_observations(self) -> dict:
         torso_position, torso_rotation = self._unitree_a1s.get_world_poses(clone=False)
+        print(f'torso_position: {torso_position[0]}')
         root_velocities = self._unitree_a1s.get_velocities(clone=False)
         dof_pos = self._unitree_a1s.get_joint_positions(clone=False)
         dof_vel = self._unitree_a1s.get_joint_velocities(clone=False)
