@@ -541,8 +541,8 @@ class UnitreeA1StandTask(RLTask):
     def _reward_dof_vel_limits(self):
         # Penalize dof velocities too close to the limit
         # clip to max error = 1 rad/s per joint to avoid huge penalties
-        print(f'dof_vel: {self.dof_vel[0]}')
-        return torch.sum((torch.square(self.dof_vel/self.dof_vel_limit) - self.soft_dof_vel_limit).clip(min=0.), dim=1)
+        # return torch.sum((torch.square(self.dof_vel/self.dof_vel_limit) - self.soft_dof_vel_limit).clip(min=0.), dim=1)
+        return torch.sum((torch.abs(self.dof_vel) - self.dof_vel_limit*self.soft_dof_vel_limit).clip(min=0., max=1.), dim=1)
 
     def _reward_down_still(self):
         #reward sit down
