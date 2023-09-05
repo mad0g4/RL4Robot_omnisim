@@ -49,7 +49,7 @@ env:
   init_state:
     # pos: [0.0, 0.0, 0.2569] # x,y,z [m]
     pos: [0.0, 0.0, 0.4] # x,y,z [m]
-    rot: [0.0, 0.0, 0.0, 1.0] # x,y,z,w [quat]
+    rot: [1.0, 0.0, 0.0, 0.0] # x,y,z,w [quat]
     lin_vel: [0.0, 0.0, 0.0]  # x,y,z [m/s]
     ang_vel: [0.0, 0.0, 0.0]  # x,y,z [rad/s]
     default_dof_poses:
