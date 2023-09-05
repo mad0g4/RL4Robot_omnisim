@@ -185,6 +185,7 @@ class UnitreeA1StandTask(RLTask):
         
         if self.dummy_action:
             actions = torch.zeros_like(actions, dtype=actions.dtype, device=actions.device)
+            actions[:] = self.default_dof_pos[:]
         
         self._sim_steps += 1
 
@@ -220,6 +221,7 @@ class UnitreeA1StandTask(RLTask):
         # dof_vel = torch_rand_float(-0.1, 0.1, (num_resets, self._unitree_a1s.num_dof), device=self._device)
         # dof_pos = self.default_dof_pos.repeat(num_resets, 1)
         dof_pos = torch.zeros((num_resets, 12), dtype=torch.float, device=self._device, requires_grad=False)
+        dof_pos[:] = self.default_dof_pos[:]
         if self.is_sample_init_state:
             dof_pos[:, :4] = torch_rand_float(self.dof_pos_limit[0, 0], self.dof_pos_limit[0, 1], (num_resets, 4), device=self.device)
             dof_pos[:, 4:8] = torch_rand_float(self.dof_pos_limit[4, 0], self.dof_pos_limit[4, 1], (num_resets, 4), device=self.device)
