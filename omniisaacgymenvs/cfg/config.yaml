@@ -9,6 +9,8 @@ num_envs: ''
 
 init_from_prepared_state_data: True
 push_robots: True
+is_sample_init_state: False
+dummy_action: False
 
 # seed - set to -1 to choose random seed
 seed: 42

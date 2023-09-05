@@ -32,6 +32,7 @@ class UnitreeA1StandTask(RLTask):
 
         # work mode
         self.is_sample_init_state = self._task_cfg["env"]["work_mode"]["is_sample_init_state"]
+        self.dummy_action = self._task_cfg["env"]["work_mode"]["dummy_action"]
 
         # normalization
         self.clip_observations = self._task_cfg["env"]["normalization"]["clip_observations"]
@@ -181,6 +182,9 @@ class UnitreeA1StandTask(RLTask):
     def pre_physics_step(self, actions) -> None:
         if not self._env._world.is_playing():
             return
+        
+        if self.dummy_action:
+            actions = torch.zeros_like(actions, dtype=actions.dtype, device=actions.device)
         
         self._sim_steps += 1
 
